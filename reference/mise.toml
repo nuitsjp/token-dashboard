@@ -1,0 +1,5 @@
+# Node.jsは.nvmrcと同じ版を指定する。Go・Pythonは以下の検証用ツール版を使用する。
+[tools]
+go = "1.26.5"
+node = "24.21.0"
+python = "3.14"

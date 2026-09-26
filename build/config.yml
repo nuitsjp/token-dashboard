@@ -1,0 +1,18 @@
+version: '3'
+# App identity and version are read from app.json by scripts/build.mjs.
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir: [.git, .tools, frontend, bin]
+    file: [.gitignore, .gitkeep]
+    watched_extension: ['*.go']
+    git_ignore: true
+  executes:
+    - cmd: wails3 task frontend:dev
+      type: background
+    - cmd: wails3 task build:dev
+      type: blocking
+    - cmd: wails3 task run
+      type: primary
