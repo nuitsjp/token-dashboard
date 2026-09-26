@@ -41,9 +41,27 @@
 <a id="design"></a>
 ## 4. 確認した事実
 
-{{EXTERNAL_FACTS}}
+### Token Monitor Hub
 
-- **確認した事実**: 外部仕様や既存コードの調査結果（情報源、対象版、確認日、確認範囲）。仮定と明確に区別します。外部システムの実測応答を保存する場合は `reference/` に配置して参照します。
+- 仕様の情報源は [Javis603/token-monitor](https://github.com/Javis603/token-monitor) の `docs/API.md` です。`cdab5686d2711efea2c961f26d1e2e8c3c211b40`（v0.63.0 以降、2026-09-27 に確認）を対象とし、`GET /api/stats/stream` の節は `8b6cee22eabb7bf7ce0226655b46907300e14a04` から変わっていません。
+- 認証は `Authorization: Bearer <secret>` ヘッダーで行います。
+- `GET /api/stats/stream` は SSE です。接続ごとに最初に全体状態の `snapshot` を送り、30秒ごとに `: hb` のコメント行を送ります。利用量・利用枠・期間の区切りなどが変わると全体状態の `stats` を送ります。要求ヘッダー `x-token-monitor-stream: 2` を付けた場合、時刻だけの変化は `limits.updatedAt` と端末ごとの時刻・鮮度切れだけを含む `freshness` で送ります。通知本文は `type`・`reason`・`stats`・`at` を持つ JSON です。
+- 全体状態の `stats.periods.today`・`month`・`allTime` は Hub 全体の集計値で、`totalTokens`（整数）と `costUsd`（数値）を持ちます。Hub は期間が終わった端末の `today`・`month` を自身の集計から除き、期間の区切りが変わると `stats` を送ります。
+- 利用枠は `stats.limits.providers[]` にアカウントごとに並び、各要素が `provider`・`accountLabel`・`planLabel` と `windows[]` を持ちます。`windows[]` の各要素は `kind`（`session`・`daily`・`weekly`・`billing`）、`showMeter`、`remainingPercent`、`usedPercent`、`resetsAt`、`label` を持ちます。`showMeter` が偽の枠は残量の割合を表示に使いません。
+- 2026-09-27 に利用者の Hub へ接続し、最初の `snapshot` のキー名と型だけを確認しました（値は記録していません）。`periods` の3期間すべてに `totalTokens` と `costUsd` があり、`limits.providers` は21件、そのうち `showMeter` が真の枠を持つのは6件で、枠は合計14件でした。
+
+### TURZX 9.2インチ
+
+- 情報源は [nuitsjp/Turzx.Net](https://github.com/nuitsjp/Turzx.Net) の `7f164ba89a229db900171bc02f608c47bdbeed5e` のソースと `docs/technical-notes.md`（2026-09-27 に実機で検証済み）です。
+- USB `1CBE:0092` の WinUSB デバイスです。bulk IN/OUT の各1本で通信し、読み書きのタイムアウトは2秒です。
+- 1回の送信は、504バイトのヘッダーを DES-CBC（鍵と IV は `slv3tuzx`、パディングなし）で暗号化し、末尾2バイトを `A1 1A` とした512バイトの制御部に、画像のバイト列を続けたものです。ヘッダーは、先頭にコマンド、2・3バイト目に `1A 6D`、4〜7バイト目にタイムスタンプ（ミリ秒、リトルエンディアン）、8〜11バイト目に画像の長さ（ビッグエンディアン）を置きます。コマンドは同期が10、JPEG が101、PNG が102です。応答の先頭がコマンドと `C8` で、2〜5バイト目が送ったタイムスタンプと一致すれば成功です。
+- 画像は 1920×462 で描き、時計回りに90度回転した 462×1920 の Baseline JPEG または PNG を1MiB以下で送ります。JPEG 品質85で毎回描画・圧縮しても約58fps、CPU 負荷は PC 全体の約0.9% でした。静止画像は送信を止めても表示が残ります。
+- 抜き差しは `CM_Register_Notification` で通知を受け、`CM_Get_Device_Interface_ListW` で再列挙して検出できます。対象の列挙には、Turzx.Net の開発 PC の WinUSB ドライバーが公開するインターフェース GUID `dee824ef-729b-4a0e-9c14-b7117d33a817` を使います。この PC で 2026-09-27 に `pnputil /enum-interfaces /enabled` を実行し、同じ GUID のインターフェースが有効であることを確認しました。ほかの PC でドライバーを入れた場合も同じ GUID になるかは確認していません。
+
+### Wails とフォント
+
+- `go.mod` の `github.com/wailsapp/wails/v3 v3.0.0-beta.23` は、Windows のタスクトレイ（`SystemTray` のアイコン、メニュー、クリック、ウィンドウの関連付け）と多重起動の防止（`SingleInstanceOptions`）を提供します（2026-09-27 にモジュールのソースで確認）。
+- この PC の Windows 11 には、日本語と英数字の両方を含む游ゴシック（Windows のフォントフォルダーの `YuGothM.ttc`、`YuGothB.ttc`）があります（2026-09-27 に確認）。
 
 <a id="commands"></a>
 ## 5. 実行・切り替え・検証手順
