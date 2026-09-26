@@ -1,7 +1,13 @@
-# Wails テンプレート
+# token-monitor-turzx
 
-新規プロジェクトは配布元ルートの `mise run init:wails <新しい出力先>` で生成します。生成先ルートには Wails・React・Go の実行可能なアプリ一式が入り、メモ編集・CSV取り込み・アプリ内更新の参照実装は `reference/` に残します。製品の現行仕様はルートの `docs/` に記述し、参照実装のユースケース・シナリオと設計は `reference/docs/` に保持します。
+Token Monitor Hub から受信した AI ツールの利用状況（トークン数・推定コストと利用枠）を、TURZX 9.2インチ USB ディスプレイへリアルタイムに表示する Windows 常駐アプリです。Windows へのサインイン時に自動で起動してタスクトレイに常駐し、ウィンドウを開くと USB ディスプレイと同じ表示のプレビューと Hub の接続設定を1画面で確認・変更できます。Wails（Go・React）で構成し、GitHub Releases で公開するインストーラーから導入・自動更新します。
 
-生成先ルートで `node scripts/run.mjs setup` を実行し、`node scripts/run.mjs dev` で製品アプリを起動するか `node scripts/run.mjs verify` で検証します。サンプルは `reference/` へ移動して同じコマンドを実行します。`.github/workflows/windows.yml` は生成先ルートと `reference/` の両方で `setup`・`verify`・`build`・`package` を実行し、インストーラーを artifact として保存する CI 例です。
+## 実行・確認手順
 
-サンプルの構成、実行手順、配布・更新の設定と、製品固有の実装へ置き換える箇所は [reference/README.md](reference/README.md) から参照してください。共通の `AGENTS.md`、標準、文書検査スクリプトは生成時に `template/` からルートへ配置します。生成時に依存取得やビルドは行わず、既存の出力先は上書きしません。`wails-template/` は単体では実行せず、生成先で開発・検証します。
+環境構築、起動、モック再現、実処理切り替え、および検証の手順は [プロジェクト定義の実行手順](docs/project.md#commands) を参照します。
+
+文書方針が未適用の場合は、[採用後の導入開始手順](https://github.com/nuitsjp/aidd-project-template#3-初期セットアップと最初のユースケース) を確認して開始します。
+
+## 関連文書
+
+文書の役割と正本の配置は [文書方針第3節](docs/document-policy.md#sources) を参照します。
