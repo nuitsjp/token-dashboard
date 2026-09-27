@@ -13,12 +13,12 @@ const line = [42, 47, 58]; // the divider and the empty part of a bar
 const green = [74, 222, 128];
 const red = [248, 113, 113];
 const points = {
-  divider: [960, 119],
-  alphaBarStart: [45, 239], // first contract, first bar
-  alphaBarMiddle: [208, 239],
-  betaBarStart: [45, 383], // second single-window contract, stacked under the first
-  betaBarEnd: [360, 383],
-  secondColumn: [420, 239],
+  divider: [356, 231], // between Tokens and Usage Limits
+  alphaBarStart: [389, 124], // lowest remaining, so the first contract of the first column
+  alphaBarMiddle: [560, 124],
+  betaBarStart: [389, 268], // the next contract, stacked under the first
+  betaBarEnd: [730, 268],
+  secondColumn: [800, 124],
 } as const;
 
 const token = 'e2e-hub-token';
@@ -135,7 +135,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       await expect.poll(async () => (await colours(page, await preview(page))).divider).toEqual(line);
       const shown = await colours(page, await preview(page));
       expect(shown.size).toEqual([1920, 462]);
-      // Contracts without a meter take no column, and single-window contracts share one.
+      // Contracts without a meter take no column, and alpha and beta share the first one.
       expect(shown.secondColumn).toEqual(background);
       // The image is drawn again within a minute without anything from the Hub.
       const current = await preview(page);
