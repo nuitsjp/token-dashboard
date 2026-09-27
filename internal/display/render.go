@@ -82,55 +82,128 @@ func (r *Renderer) Render(stats *usage.Stats, now time.Time) *image.RGBA {
 		return img
 	}
 	r.tokens(img, stats.Periods)
-	fill(img, image.Rect(960, 40, 962, Height-40), divider)
+	fill(img, image.Rect(40, 118, Width-40, 120), divider)
 	r.limits(img, stats.Limits, now)
 	return img
 }
 
+// tokens draws Today, Month and All in one row: label, tokens and cost side by side.
 func (r *Renderer) tokens(img *image.RGBA, periods usage.Periods) {
-	r.text(img, r.face(true, 30), dim, 40, 64, "TOKENS")
+	label, value, cost := r.face(false, 28), r.face(true, 48), r.face(false, 36)
 	for i, p := range []struct {
 		label  string
 		period usage.Period
 	}{{"Today", periods.Today}, {"Month", periods.Month}, {"All", periods.AllTime}} {
-		x := 40 + i*300
-		r.text(img, r.face(false, 34), dim, x, 150, p.label)
-		r.text(img, r.face(true, 72), text, x, 250, compactTokens(p.period.TotalTokens))
-		r.text(img, r.face(false, 50), accent, x, 345, usd(p.period.CostUSD))
+		x := 40 + i*620
+		r.text(img, label, dim, x, 84, p.label)
+		x += measure(label, p.label) + 20
+		tokens := commas(fmt.Sprint(p.period.TotalTokens))
+		r.text(img, value, text, x, 84, tokens)
+		x += measure(value, tokens) + 20
+		r.text(img, cost, accent, x, 84, usd(p.period.CostUSD))
 	}
 }
 
-func (r *Renderer) limits(img *image.RGBA, limits usage.Limits, now time.Time) {
-	r.text(img, r.face(true, 30), dim, 1000, 64, "USAGE LIMITS")
-	const rows, columns, width = 4, 2, 420
-	slot := 0
+// group is one contract: the windows of a provider that show a meter.
+type group struct {
+	name, plan string
+	windows    []usage.Window
+}
+
+func groups(limits usage.Limits) []group {
+	var out []group
 	for _, p := range limits.Providers {
+		g := group{name: p.Provider, plan: p.PlanLabel}
+		if g.plan == "" {
+			g.plan = p.AccountLabel
+		}
 		for _, w := range p.Windows {
-			if !w.ShowMeter || slot == rows*columns {
-				continue
+			if w.ShowMeter {
+				g.windows = append(g.windows, w)
 			}
-			x, y := 1000+(slot/rows)*(width+40), 88+(slot%rows)*88
-			slot++
-			percent := "—"
-			if w.RemainingPercent != nil {
-				percent = fmt.Sprintf("%.0f%%", *w.RemainingPercent)
-			}
-			big, small := r.face(true, 30), r.face(false, 22)
-			pw := measure(big, percent)
-			r.text(img, big, text, x+width-pw, y+34, percent)
-			r.text(img, r.face(true, 26), text, x, y+34, truncate(r.face(true, 26), p.AccountLabel, width-pw-20))
-			fill(img, image.Rect(x, y+46, x+width, y+58), track)
-			if w.RemainingPercent != nil {
-				v := min(max(*w.RemainingPercent, 0), 100)
-				fill(img, image.Rect(x, y+46, x+int(float64(width)*v/100), y+58), meterColor(v))
-			}
-			reset := ""
-			if w.ResetsAt != nil {
-				reset = remaining(w.ResetsAt.Sub(now))
-			}
-			rw := measure(small, reset)
-			r.text(img, small, dim, x+width-rw, y+84, reset)
-			r.text(img, small, dim, x, y+84, truncate(small, w.Label, width-rw-20))
+		}
+		if len(g.windows) > 0 {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+const (
+	limitsTop    = 136
+	columns      = 5
+	columnGap    = 40
+	columnWidth  = (Width - 80 - (columns-1)*columnGap) / columns
+	headerHeight = 66
+	rowHeight    = 64
+	barRows      = 4
+	stackGap     = 36
+)
+
+// height is the drawn height of a group: its header and up to four bar rows.
+func (g group) height() int { return headerHeight + (min(len(g.windows), barRows)-1)*rowHeight + 42 }
+
+// layout places groups into columns in Hub order. A group with a single window is stacked
+// under the earlier single-window groups while their column has room.
+func layout(gs []group) [][]group {
+	var out [][]group
+	singles, used := -1, 0
+	for _, g := range gs {
+		if len(g.windows) == 1 && singles >= 0 && used+stackGap+g.height() <= Height-limitsTop {
+			out[singles] = append(out[singles], g)
+			used += stackGap + g.height()
+			continue
+		}
+		if len(out) == columns {
+			break
+		}
+		if len(g.windows) == 1 {
+			singles, used = len(out), g.height()
+		}
+		out = append(out, []group{g})
+	}
+	return out
+}
+
+// limits draws contracts left to right, each with its name and plan above its bars.
+func (r *Renderer) limits(img *image.RGBA, limits usage.Limits, now time.Time) {
+	for i, column := range layout(groups(limits)) {
+		x, y := 40+i*(columnWidth+columnGap), limitsTop
+		for _, g := range column {
+			r.text(img, r.face(true, 28), text, x, y+26, truncate(r.face(true, 28), g.name, columnWidth))
+			r.text(img, r.face(false, 20), dim, x, y+52, truncate(r.face(false, 20), g.plan, columnWidth))
+			r.bars(img, g, x, y+headerHeight, now)
+			y += g.height() + stackGap
+		}
+	}
+}
+
+// bars draws up to four windows as labelled bars. The times until reset share one right edge
+// so they line up across rows.
+func (r *Renderer) bars(img *image.RGBA, g group, x, y int, now time.Time) {
+	big, small := r.face(true, 24), r.face(false, 18)
+	resetRight := x + columnWidth - measure(big, "100%") - 16
+	for i, w := range g.windows {
+		if i == barRows {
+			break
+		}
+		top := y + i*rowHeight
+		percent := "—"
+		if w.RemainingPercent != nil {
+			percent = fmt.Sprintf("%.0f%%", *w.RemainingPercent)
+		}
+		r.text(img, big, text, x+columnWidth-measure(big, percent), top+22, percent)
+		reset := ""
+		if w.ResetsAt != nil {
+			reset = remaining(w.ResetsAt.Sub(now))
+		}
+		rw := measure(small, reset)
+		r.text(img, small, dim, resetRight-rw, top+22, reset)
+		r.text(img, small, text, x, top+22, truncate(small, w.Label, resetRight-rw-12-x))
+		fill(img, image.Rect(x, top+32, x+columnWidth, top+42), track)
+		if w.RemainingPercent != nil {
+			v := min(max(*w.RemainingPercent, 0), 100)
+			fill(img, image.Rect(x, top+32, x+int(float64(columnWidth)*v/100), top+42), meterColor(v))
 		}
 	}
 }
@@ -186,30 +259,21 @@ func meterColor(remaining float64) color.Color {
 	}
 }
 
-func compactTokens(n int64) string {
-	switch {
-	case n >= 1_000_000_000:
-		return fmt.Sprintf("%.1fB", float64(n)/1e9)
-	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1e6)
-	case n >= 1_000:
-		return fmt.Sprintf("%.1fK", float64(n)/1e3)
-	default:
-		return fmt.Sprint(n)
-	}
+func usd(v float64) string {
+	whole, cents, _ := strings.Cut(fmt.Sprintf("%.2f", v), ".")
+	return "$" + commas(whole) + "." + cents
 }
 
-func usd(v float64) string {
-	s := fmt.Sprintf("%.2f", v)
-	whole, cents, _ := strings.Cut(s, ".")
+// commas groups the digits of a non-negative integer by thousands.
+func commas(digits string) string {
 	var b strings.Builder
-	for i, c := range whole {
-		if i > 0 && (len(whole)-i)%3 == 0 {
+	for i, c := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
 			b.WriteByte(',')
 		}
 		b.WriteRune(c)
 	}
-	return "$" + b.String() + "." + cents
+	return b.String()
 }
 
 // remaining formats the time until a reset as "2h 13m" below a day and "3d 4h" from a day.

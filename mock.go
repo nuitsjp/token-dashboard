@@ -33,28 +33,33 @@ func mockUsage(now time.Time, update int) *usage.Stats {
 			AllTime: usage.Period{TotalTokens: 2_345_678_901, CostUSD: 2345.67},
 		},
 		Limits: usage.Limits{Providers: []usage.Provider{
-			{Provider: "claude", AccountLabel: "Claude Max", Windows: []usage.Window{
-				{Kind: "session", Label: "Session", ShowMeter: true, RemainingPercent: pct(58), ResetsAt: at(2*time.Hour + 13*time.Minute)},
-				{Kind: "weekly", Label: "Weekly", ShowMeter: true, RemainingPercent: pct(80), ResetsAt: at(3*24*time.Hour + 4*time.Hour)},
+			{Provider: "antigravity", PlanLabel: "Pro", Windows: []usage.Window{
+				{Kind: "session", Label: "Claude/GPT 5-hour", ShowMeter: true, RemainingPercent: pct(100), ResetsAt: at(4*time.Hour + 55*time.Minute)},
+				{Kind: "session", Label: "Gemini 5-hour", ShowMeter: true, RemainingPercent: pct(96), ResetsAt: at(1*time.Hour + 34*time.Minute)},
+				{Kind: "weekly", Label: "Claude/GPT weekly", ShowMeter: true, RemainingPercent: pct(100), ResetsAt: at(6*24*time.Hour + 19*time.Hour)},
+				{Kind: "weekly", Label: "Gemini weekly", ShowMeter: true, RemainingPercent: pct(99), ResetsAt: at(6*24*time.Hour + 15*time.Hour)},
+			}},
+			{Provider: "claude", PlanLabel: "Pro", Windows: []usage.Window{
+				{Kind: "session", Label: "session", ShowMeter: true, RemainingPercent: pct(72), ResetsAt: at(4*time.Hour + 20*time.Minute)},
+				{Kind: "weekly", Label: "weekly", ShowMeter: true, RemainingPercent: pct(85), ResetsAt: at(6*24*time.Hour + 18*time.Hour)},
 				{Kind: "billing", Label: "Usage credits", ShowMeter: false},
 			}},
-			{Provider: "codex", AccountLabel: "ChatGPT Pro", Windows: []usage.Window{
-				{Kind: "session", Label: "5 hour", ShowMeter: true, RemainingPercent: pct(35), ResetsAt: at(47 * time.Minute)},
-				{Kind: "weekly", Label: "Weekly", ShowMeter: true, RemainingPercent: pct(12), ResetsAt: at(6*24*time.Hour + 30*time.Minute)},
+			{Provider: "codex", PlanLabel: "Pro 5x", Windows: []usage.Window{
+				{Kind: "weekly", Label: "weekly", ShowMeter: true, RemainingPercent: pct(38), ResetsAt: at(6*24*time.Hour + 15*time.Hour + 40*time.Minute)},
 			}},
-			{Provider: "copilot", AccountLabel: "GitHub Copilot Business", Windows: []usage.Window{
-				{Kind: "billing", Label: "Premium requests", ShowMeter: true, RemainingPercent: pct(91), ResetsAt: at(18*24*time.Hour + 2*time.Hour)},
+			{Provider: "cursor", PlanLabel: "Pro", Windows: []usage.Window{
+				{Kind: "billing", Label: "Cursor Models", ShowMeter: true, RemainingPercent: pct(95), ResetsAt: at(15*24*time.Hour + 17*time.Hour)},
+				{Kind: "billing", Label: "Other Models", ShowMeter: true, RemainingPercent: pct(71), ResetsAt: at(15*24*time.Hour + 17*time.Hour)},
+				{Kind: "billing", Label: "Grok Bot", ShowMeter: true, RemainingPercent: pct(100)},
 			}},
-			{Provider: "gemini", AccountLabel: "Gemini Code Assist", Windows: []usage.Window{
-				{Kind: "daily", Label: "Daily", ShowMeter: true, RemainingPercent: pct(67), ResetsAt: at(9*time.Hour + 5*time.Minute)},
+			{Provider: "grok", PlanLabel: "SuperGrok", Windows: []usage.Window{
+				{Kind: "weekly", Label: "Weekly", ShowMeter: true, RemainingPercent: pct(91), ResetsAt: at(5*24*time.Hour + 3*time.Hour)},
 			}},
-			{Provider: "opencode", AccountLabel: "OpenCode Zen", Windows: []usage.Window{
+			{Provider: "opencode", PlanLabel: "Go", Windows: []usage.Window{
+				{Kind: "billing", Label: "billing", ShowMeter: true, RemainingPercent: pct(12), ResetsAt: at(13*24*time.Hour + 17*time.Hour)},
+				{Kind: "session", Label: "session", ShowMeter: true, RemainingPercent: pct(100), ResetsAt: at(4*time.Hour + 55*time.Minute)},
+				{Kind: "weekly", Label: "weekly", ShowMeter: true, RemainingPercent: pct(97), ResetsAt: at(21 * time.Hour)},
 				{Kind: "billing", Label: "Credits", ShowMeter: false},
-			}},
-			{Provider: "kimi", AccountLabel: "Kimi Membership", Windows: []usage.Window{
-				{Kind: "billing", Label: "Monthly", ShowMeter: true, RemainingPercent: pct(44), ResetsAt: at(11*24*time.Hour + 7*time.Hour)},
-				{Kind: "weekly", Label: "Weekly", ShowMeter: true, RemainingPercent: pct(73), ResetsAt: at(2*24*time.Hour + 16*time.Hour)},
-				{Kind: "daily", Label: "Daily", ShowMeter: true, RemainingPercent: pct(5), ResetsAt: at(3*time.Hour + 58*time.Minute)},
 			}},
 		}},
 	}
