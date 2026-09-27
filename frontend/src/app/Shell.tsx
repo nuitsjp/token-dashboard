@@ -25,7 +25,6 @@ function Content() {
       {__MOCK__ && <Badge color="orange">Mock data</Badge>}
     </header>
     <main className={styles.main}>
-      {__MOCK__ && <Alert color="orange" mb="lg">Fixed test data. Nothing is saved.</Alert>}
       <ErrorNotice error={info.error || error} />
       {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow" mb="lg">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}
       <Outlet />
