@@ -214,9 +214,15 @@ func run() error {
 		})
 		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
-	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+	if serverMode {
+		// Server mode has no tray and never emits ApplicationStarted.
 		go updates.Run(ctx, updateService, updateReady)
-	})
+	} else {
+		// The tray menu can be rebuilt only once the application is running.
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			go updates.Run(ctx, updateService, updateReady)
+		})
+	}
 	return app.Run()
 }
 func serverPort() (int, error) {
