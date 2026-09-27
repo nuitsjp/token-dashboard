@@ -69,6 +69,8 @@
 
 作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
+mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
+
 | 目的 | コマンド | 期待結果 |
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
