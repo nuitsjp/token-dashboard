@@ -33,31 +33,35 @@ function Editor({ saved }: { saved: View }) {
     setDisplay(view.displayID || automatic);
     setDone(true);
   }
-  return <SimpleGrid cols={2} spacing="xl">
-    <Stack gap="sm">
-      <Title order={5}>Usage source</Title>
-      <Select label="Data source" data={['Local', 'Hub']} value={source} allowDeselect={false}
-        onChange={value => { if (value) { setSource(value); setDone(false); } }} />
-      {source === 'Hub' && <>
-        <Title order={5}>Hub connection</Title>
+  return <Stack gap="sm">
+    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">
+      <Stack gap="sm">
+        <Title order={5}>Usage source</Title>
+        <Select label="Data source" data={['Local', 'Hub']} value={source} allowDeselect={false}
+          onChange={value => { if (value) { setSource(value); setDone(false); } }} />
+      </Stack>
+      <Stack gap="sm">
+        <Title order={5}>Display</Title>
+        <Select label="Output device" data={options} value={display} allowDeselect={false} error={fields.displayID}
+          onChange={value => { if (value) { setDisplay(value); setDone(false); } }} />
+        {displays.length === 0 && <Text size="sm" c="dimmed">No TURZX display is connected.</Text>}
+      </Stack>
+    </SimpleGrid>
+    {source === 'Hub' && <Stack gap="sm">
+      <Title order={5}>Hub connection</Title>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">
         <TextInput label="Hub URL" placeholder="https://hub.example.com" value={url} error={fields.url}
           onChange={e => { setURL(e.currentTarget.value); setDone(false); }} />
         <PasswordInput label={<Group gap="xs" component="span">Access token<Badge size="sm" variant="light" color={saved.tokenSet ? 'green' : 'gray'}>{saved.tokenSet ? 'Set' : 'Not set'}</Badge></Group>}
           description={saved.tokenSet ? 'Leave blank to keep the saved token.' : undefined}
           value={token} error={fields.token} autoComplete="off"
           onChange={e => { setToken(e.currentTarget.value); setDone(false); }} />
-      </>}
-    </Stack>
-    <Stack gap="sm">
-      <Title order={5}>Display</Title>
-      <Select label="Output device" data={options} value={display} allowDeselect={false} error={fields.displayID}
-        onChange={value => { if (value) { setDisplay(value); setDone(false); } }} />
-      {displays.length === 0 && <Text size="sm" c="dimmed">No TURZX display is connected.</Text>}
-      <ErrorNotice error={save.error} />
-      {done && !dirty && <Alert color="green" py="xs">Saved.</Alert>}
-      <Group justify="flex-end" mt="auto"><Button loading={save.isPending} onClick={() => void submit().catch(() => {})}>Save</Button></Group>
-    </Stack>
-  </SimpleGrid>;
+      </SimpleGrid>
+    </Stack>}
+    <ErrorNotice error={save.error} />
+    {done && !dirty && <Alert color="green" py="xs">Saved.</Alert>}
+    <Group justify="flex-end"><Button loading={save.isPending} onClick={() => void submit().catch(() => {})}>Save</Button></Group>
+  </Stack>;
 }
 
 export function ConfigureHub() {
