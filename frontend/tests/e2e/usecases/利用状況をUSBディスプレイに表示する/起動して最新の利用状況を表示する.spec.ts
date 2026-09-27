@@ -81,6 +81,38 @@ async function colours(page: Page, src: string) {
   }, { src, points });
 }
 
+// The tokens of Today, Month and All, below each label and cost in the Tokens column.
+const tokenRows = { today: [0, 75, 350, 110], month: [0, 215, 350, 250], all: [0, 355, 350, 390] } as const;
+
+// Returns the leftmost and rightmost x of the pixels in each rect [left, top, right, bottom]
+// that differ from the background.
+async function extents(page: Page, src: string) {
+  return page.evaluate(async ({ src, rects }) => {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const context = canvas.getContext('2d')!;
+    context.drawImage(img, 0, 0);
+    const result: Record<string, number[]> = {};
+    for (const [name, [left, top, right, bottom]] of Object.entries(rects)) {
+      const data = context.getImageData(left, top, right - left, bottom - top).data;
+      let min = Infinity;
+      let max = -Infinity;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] === 15 && data[i + 1] === 17 && data[i + 2] === 23) continue;
+        const x = left + ((i / 4) % (right - left));
+        min = Math.min(min, x);
+        max = Math.max(max, x);
+      }
+      result[name] = [min, max];
+    }
+    return result;
+  }, { src, rects: tokenRows });
+}
+
 test('起動して、Hub の最新の利用状況をプレビューに表示し続ける', async ({ page, context }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
@@ -157,6 +189,12 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       expect(shown.size).toEqual([1920, 462]);
       // Contracts without a meter take no column, and alpha and beta share the first one.
       expect(shown.secondColumn).toEqual(background);
+      // The tokens end at the right edge of the cost (x = 330), so their widths differ on the left.
+      for (const [left, right] of Object.values(await extents(page, await preview(page)))) {
+        expect(right).toBeGreaterThanOrEqual(320);
+        expect(right).toBeLessThan(331);
+        expect(left).toBeGreaterThan(60);
+      }
       // The image is drawn again within a minute without anything from the Hub.
       const current = await preview(page);
       await expect.poll(() => preview(page), { timeout: 70_000, intervals: [5_000] }).not.toBe(current);
