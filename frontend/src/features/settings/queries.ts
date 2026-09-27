@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as Settings from '@bindings/token-monitor-turzx/internal/settings/service';
+import * as Settings from '@settings-service';
 import type { SaveRequest } from '@bindings/token-monitor-turzx/internal/settings/models';
 
 export const settingsKey = ['settings'] as const;

@@ -11,11 +11,12 @@ const automatic = '__automatic__';
 
 function Editor({ saved }: { saved: View }) {
   const save = useSaveSettings();
+  const [source, setSource] = useState(saved.source || 'Local');
   const [url, setURL] = useState(saved.url);
   const [token, setToken] = useState('');
   const [display, setDisplay] = useState(saved.displayID || automatic);
   const [done, setDone] = useState(false);
-  const dirty = url !== saved.url || token !== '' || display !== (saved.displayID || automatic);
+  const dirty = source !== (saved.source || 'Local') || (source === 'Hub' && (url !== saved.url || token !== '')) || display !== (saved.displayID || automatic);
   useDraftDirty(dirty);
   const displays = saved.displays ?? [];
   const fields = save.error ? publicError(save.error).fieldErrors ?? {} : {};
@@ -25,7 +26,8 @@ function Editor({ saved }: { saved: View }) {
   ];
   async function submit() {
     setDone(false);
-    const view = await save.mutateAsync({ url, token, displayID: display === automatic ? '' : display });
+    const view = await save.mutateAsync({ source, url, token, displayID: display === automatic ? '' : display });
+    setSource(view.source || 'Local');
     setURL(view.url);
     setToken('');
     setDisplay(view.displayID || automatic);
@@ -33,13 +35,18 @@ function Editor({ saved }: { saved: View }) {
   }
   return <SimpleGrid cols={2} spacing="xl">
     <Stack gap="sm">
-      <Title order={5}>Hub connection</Title>
+      <Title order={5}>Usage source</Title>
+      <Select label="Data source" data={['Local', 'Hub']} value={source} allowDeselect={false}
+        onChange={value => { if (value) { setSource(value); setDone(false); } }} />
+      {source === 'Hub' && <>
+        <Title order={5}>Hub connection</Title>
         <TextInput label="Hub URL" placeholder="https://hub.example.com" value={url} error={fields.url}
           onChange={e => { setURL(e.currentTarget.value); setDone(false); }} />
         <PasswordInput label={<Group gap="xs" component="span">Access token<Badge size="sm" variant="light" color={saved.tokenSet ? 'green' : 'gray'}>{saved.tokenSet ? 'Set' : 'Not set'}</Badge></Group>}
           description={saved.tokenSet ? 'Leave blank to keep the saved token.' : undefined}
           value={token} error={fields.token} autoComplete="off"
           onChange={e => { setToken(e.currentTarget.value); setDone(false); }} />
+      </>}
     </Stack>
     <Stack gap="sm">
       <Title order={5}>Display</Title>

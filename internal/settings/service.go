@@ -28,6 +28,7 @@ type Display struct {
 
 // View never contains the token itself, only whether one is saved.
 type View struct {
+	Source   string `json:"source"`
 	URL      string `json:"url"`
 	TokenSet bool   `json:"tokenSet"`
 	// DisplayID is empty when the first connected display is used automatically.
@@ -36,6 +37,7 @@ type View struct {
 }
 
 type SaveRequest struct {
+	Source string `json:"source"`
 	URL string `json:"url"`
 	// An empty token keeps the saved one.
 	Token     string `json:"token"`
