@@ -9,8 +9,8 @@ export function UsagePreview() {
   const client = useQueryClient();
   const preview = useQuery(getPreview());
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewKey })), [client]);
-  return <Card withBorder padding="lg">
-    <Title order={4} mb="md">Preview</Title>
+  return <Card withBorder padding="md">
+    <Title order={4} mb="sm">Preview</Title>
     <ErrorNotice error={preview.error} />
     {preview.data
       ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio: '1920 / 462' }} />

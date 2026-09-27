@@ -35,6 +35,11 @@ var webAssets embed.FS
 //go:embed build/app.json
 var configJSON []byte
 
+// Fixed at build time through -ldflags -X (see scripts/build.mjs): the release CI sets
+// the version from the tag, and the desktop E2E also sets a local update source.
+// An empty value keeps the one in build/app.json.
+var buildVersion, buildUpdateSource, buildUpdatePublicKey string
+
 type appConfig struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
@@ -55,6 +60,11 @@ func run() error {
 	var cfg appConfig
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return err
+	}
+	for target, value := range map[*string]string{&cfg.Version: buildVersion, &cfg.UpdateSource: buildUpdateSource, &cfg.UpdatePublicKey: buildUpdatePublicKey} {
+		if value != "" {
+			*target = value
+		}
 	}
 	if cfg.ID == "" || cfg.Name == "" {
 		return fmt.Errorf("build/app.json: id and name are required")
@@ -104,10 +114,12 @@ func run() error {
 	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
-	updateService := updates.New(updates.Config{
+	updateConfig := updates.Config{
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
-	}, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
+	}
+	mock := !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock"
+	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	renderer, err := display.NewRenderer()
 	if err != nil {
 		return err
@@ -157,9 +169,16 @@ func run() error {
 	receiver := hub.New(func() (string, string, error) { return settings.Connection(settingsService) }, usageState, logger)
 	settingsService.OnSaved = receiver.Restart
 	go receiver.Run(ctx)
+	updateReady := func(string) {}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
-		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})
+		// The title bar is the only place that shows the name and version.
+		title := cfg.Name + " v" + cfg.Version
+		if mock {
+			title += " (Mock data)"
+		}
+		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: title, Width: 1160, Height: 800, URL: "/", Hidden: true,
+			Windows: application.WindowsWindow{Theme: application.Dark}})
 		window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 			e.Cancel()
 			window.Hide()
@@ -170,6 +189,7 @@ func run() error {
 			window.Focus()
 		}
 		menu := application.NewMenu()
+		update := menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {
@@ -186,6 +206,32 @@ func run() error {
 		tray.SetTooltip(cfg.Name)
 		tray.SetMenu(menu)
 		tray.OnClick(show)
+		setUpdate := func(label string) {
+			application.InvokeSync(func() {
+				update.SetLabel(label).SetHidden(label == "")
+				// The Windows tray builds its popup when the menu is set.
+				tray.SetMenu(menu)
+			})
+		}
+		update.OnClick(func(*application.Context) {
+			// Same path as the window's button; a failure keeps the app running.
+			if err := updateService.Apply(); err != nil {
+				setUpdate("")
+				show()
+				return
+			}
+			app.Quit()
+		})
+		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
+	}
+	if serverMode {
+		// Server mode has no tray and never emits ApplicationStarted.
+		go updates.Run(ctx, updateService, updateReady)
+	} else {
+		// The tray menu can be rebuilt only once the application is running.
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			go updates.Run(ctx, updateService, updateReady)
+		})
 	}
 	return app.Run()
 }

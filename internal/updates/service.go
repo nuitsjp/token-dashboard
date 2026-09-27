@@ -134,11 +134,6 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 		return status, err
 	}
 	defer release()
-	done, err := s.state.Begin()
-	if err != nil {
-		return status, err
-	}
-	defer done()
 	s.mu.Lock()
 	m := s.manifest
 	available := s.status.Available
@@ -224,6 +219,24 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 	s.report("ready", copied, m.Size)
 	return s.GetStatus(), nil
 }
+
+// Run checks once for a newer release and stages its installer in the
+// background. A failure is only logged; the next startup checks again.
+func Run(ctx context.Context, s *Service, onReady func(version string)) {
+	// Leftovers from a download interrupted by exit are never trusted.
+	os.RemoveAll(s.cfg.CacheDir)
+	status, err := s.Check(ctx)
+	if err == nil && status.Available {
+		status, err = s.Download(ctx)
+	}
+	if err != nil {
+		s.logger.Warn("update_not_staged", "code", fault.Public(err).Code)
+		return
+	}
+	if status.Phase == "ready" {
+		onReady(status.Version)
+	}
+}
 func (s *Service) Apply() (err error) {
 	defer func() { err = fault.Boundary(s.logger, "updates.apply", err) }()
 	release, err := s.acquire()
@@ -261,6 +274,7 @@ func (s *Service) Apply() (err error) {
 		return err
 	}
 	if n != m.Size || !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), m.SHA256) {
+		s.report("untrusted", 0, m.Size)
 		return fault.New("UPDATE_UNTRUSTED", "適用前の再検証に失敗しました。")
 	}
 	if s.launch == nil {

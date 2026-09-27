@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, PasswordInput, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
 import type { View } from '@bindings/token-monitor-turzx/internal/settings/models';
 import { getSettings, useSaveSettings } from '../../features/settings/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
@@ -31,35 +31,33 @@ function Editor({ saved }: { saved: View }) {
     setDisplay(view.displayID || automatic);
     setDone(true);
   }
-  return <Stack>
-    <Card withBorder padding="lg">
-      <Title order={4} mb="md">Hub connection</Title>
-      <Stack>
+  return <SimpleGrid cols={2} spacing="xl">
+    <Stack gap="sm">
+      <Title order={5}>Hub connection</Title>
         <TextInput label="Hub URL" placeholder="https://hub.example.com" value={url} error={fields.url}
           onChange={e => { setURL(e.currentTarget.value); setDone(false); }} />
         <PasswordInput label={<Group gap="xs" component="span">Access token<Badge size="sm" variant="light" color={saved.tokenSet ? 'green' : 'gray'}>{saved.tokenSet ? 'Set' : 'Not set'}</Badge></Group>}
           description={saved.tokenSet ? 'Leave blank to keep the saved token.' : undefined}
           value={token} error={fields.token} autoComplete="off"
           onChange={e => { setToken(e.currentTarget.value); setDone(false); }} />
-      </Stack>
-    </Card>
-    <Card withBorder padding="lg">
-      <Title order={4} mb="md">Display</Title>
+    </Stack>
+    <Stack gap="sm">
+      <Title order={5}>Display</Title>
       <Select label="Output device" data={options} value={display} allowDeselect={false} error={fields.displayID}
         onChange={value => { if (value) { setDisplay(value); setDone(false); } }} />
-      {displays.length === 0 && <Text size="sm" c="dimmed" mt="xs">No TURZX display is connected.</Text>}
-    </Card>
-    <ErrorNotice error={save.error} />
-    {done && !dirty && <Alert color="green">Saved.</Alert>}
-    <Group justify="flex-end"><Button loading={save.isPending} onClick={() => void submit().catch(() => {})}>Save</Button></Group>
-  </Stack>;
+      {displays.length === 0 && <Text size="sm" c="dimmed">No TURZX display is connected.</Text>}
+      <ErrorNotice error={save.error} />
+      {done && !dirty && <Alert color="green" py="xs">Saved.</Alert>}
+      <Group justify="flex-end" mt="auto"><Button loading={save.isPending} onClick={() => void submit().catch(() => {})}>Save</Button></Group>
+    </Stack>
+  </SimpleGrid>;
 }
 
 export function ConfigureHub() {
   const settings = useQuery(getSettings());
-  return <Stack>
-    <Title order={2}>Settings</Title>
+  return <Card withBorder padding="md">
+    <Title order={4} mb="sm">Settings</Title>
     <ErrorNotice error={settings.error} />
     {settings.data && <Editor saved={settings.data} />}
-  </Stack>;
+  </Card>;
 }
