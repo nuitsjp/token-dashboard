@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet } from '@tanstack/react-router';
 import { useIsMutating, useQuery } from '@tanstack/react-query';
-import { Alert, Badge, Button, Group, Modal, Stack, Text } from '@mantine/core';
+import { Alert, Button, Group, Modal, Stack, Text } from '@mantine/core';
 import { appInfo, confirmQuit, ready, subscribeClose } from '../features/application/queries';
 import { ErrorNotice } from '../shared/ErrorNotice';
 import { ExitProvider, useExit } from '../shared/ExitContext';
@@ -20,10 +20,6 @@ function Content() {
   }, []);
   async function close() { try { await confirmQuit(); } catch (failure) { setError(failure); } }
   return <div className={styles.shell}>
-    <header className={styles.header}>
-      <Group gap="sm"><Text fw={700}>{info.data?.name ?? 'token-monitor-turzx'}</Text><Text size="xs" c="dimmed">v{info.data?.version ?? '—'}</Text></Group>
-      {__MOCK__ && <Badge color="orange">Mock data</Badge>}
-    </header>
     <main className={styles.main}>
       <ErrorNotice error={info.error || error} />
       {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow" mb="lg">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}

@@ -111,7 +111,8 @@ func run() error {
 	}
 	launch := updates.LaunchInstaller
 	updateDelay := time.Duration(0)
-	if !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock" {
+	mock := !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock"
+	if mock {
 		if launch, err = mockRelease(dir, &updateConfig, logger); err != nil {
 			return err
 		}
@@ -170,7 +171,13 @@ func run() error {
 	updateReady := func(string) {}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
-		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})
+		// The title bar is the only place that shows the name and version.
+		title := cfg.Name + " v" + cfg.Version
+		if mock {
+			title += " (Mock data)"
+		}
+		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: title, Width: 1160, Height: 800, URL: "/", Hidden: true,
+			Windows: application.WindowsWindow{Theme: application.Dark}})
 		window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 			e.Cancel()
 			window.Hide()
