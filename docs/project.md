@@ -84,6 +84,8 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | インストーラーの作成 | `node scripts/run.mjs package` | `bin\token-monitor-turzx-<版>-amd64-setup.exe` ができます。版は `build/app.json` の `version` です |
 | 更新情報の作成 | `node scripts/run.mjs release manifest -key $env:USERPROFILE\.token-monitor-turzx\release-signing.key -installer bin\token-monitor-turzx-<版>-amd64-setup.exe -app-id io.github.nuitsjp.token-monitor-turzx -version <版> -out bin` | `bin\update.json` ができます。インストーラーと `update.json` を GitHub Releases の最新リリースに置くと、各 PC のアプリが次の起動時に新版として取得します |
 
+デスクトップ版のビルドとインストーラーの作成では、環境変数 `BUILD_APP_VERSION` を指定すると、版番号を `build/app.json` の代わりにその値にし、更新元と公開鍵も `BUILD_UPDATE_SOURCE`・`BUILD_UPDATE_PUBLIC_KEY` の値（未指定なら空）にします。値はビルド時に実行ファイルへ埋め込み、実行時の環境変数では変わりません。更新の E2E が、手元の更新元を使う版を作るためのもので、配布するビルドでは指定しません。
+
 モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
 
 接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。

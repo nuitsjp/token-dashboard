@@ -7,6 +7,12 @@ process.chdir(root);
 const windows = process.platform === 'win32';
 const cli = resolve('.tools', windows ? 'wails3.exe' : 'wails3');
 const app = JSON.parse(readFileSync('build/app.json', 'utf8'));
+// The desktop E2E builds its own versions against a local update source. The
+// values are fixed into the binary at build time; nothing reads them at run time.
+const override = process.env.BUILD_APP_VERSION
+  ? { version: process.env.BUILD_APP_VERSION, source: process.env.BUILD_UPDATE_SOURCE ?? '', key: process.env.BUILD_UPDATE_PUBLIC_KEY ?? '' }
+  : null;
+if (override) app.version = override.version;
 const arch = process.env.GOARCH || (process.arch === 'arm64' ? 'arm64' : 'amd64');
 const target = resolve('bin', app.executable);
 const server = resolve('bin', 'token-monitor-turzx-server' + (windows ? '.exe' : ''));
@@ -34,7 +40,8 @@ try {
     const manifest = readFileSync('build/windows/app.manifest', 'utf8').replaceAll('__APP_ID__', app.id).replaceAll('__APP_VERSION__', app.version);
     writeFileSync('bin/app.manifest', manifest);
     run(cli, ['generate', 'syso', '-manifest', 'bin/app.manifest', '-icon', 'build/windows/app.ico', '-arch', arch, '-out', `rsrc_windows_${arch}.syso`]);
-    run('go', ['build', '-trimpath', ...(production ? ['-tags', 'production'] : []), '-ldflags', '-H windowsgui', '-o', target, '.'], { env: { ...process.env, GOOS: 'windows', GOARCH: arch, CGO_ENABLED: '0' } });
+    const ldflags = ['-H windowsgui', ...(override ? [`-X 'main.buildVersion=${override.version}'`, `-X 'main.buildUpdateSource=${override.source}'`, `-X 'main.buildUpdatePublicKey=${override.key}'`] : [])].join(' ');
+    run('go', ['build', '-trimpath', ...(production ? ['-tags', 'production'] : []), '-ldflags', ldflags, '-o', target, '.'], { env: { ...process.env, GOOS: 'windows', GOARCH: arch, CGO_ENABLED: '0' } });
   } else if (command === 'server') {
     run('go', ['build', '-trimpath', '-tags', 'server,production', '-o', server, '.'], { env: { ...process.env, CGO_ENABLED: '0' } });
   } else if (command === 'run' || command === 'run-server') {
