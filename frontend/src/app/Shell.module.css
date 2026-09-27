@@ -1,4 +1,4 @@
-.shell { min-height: 100vh; background: #f5f6f8; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 10px 24px; background: white; border-bottom: 1px solid #e6e8eb; }
+.shell { min-height: 100vh; background: var(--mantine-color-dark-8); }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 10px 24px; background: var(--mantine-color-dark-7); border-bottom: 1px solid var(--mantine-color-dark-4); }
 .main { padding: 16px 24px; max-width: 960px; margin: 0 auto; }
 @media(max-width: 760px) { .header { padding: 12px 16px; } .main { padding: 16px; } }
