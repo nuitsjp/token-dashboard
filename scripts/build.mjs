@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,6 +16,13 @@ if (process.env.BUILD_APP_VERSION) app.version = process.env.BUILD_APP_VERSION;
 const arch = process.env.GOARCH || (process.arch === 'arm64' ? 'arm64' : 'amd64');
 const target = resolve('bin', app.executable);
 const server = resolve('bin', 'token-monitor-turzx-server' + (windows ? '.exe' : ''));
+function bundleTokscale() {
+  if (!windows) return;
+  const platform = arch === 'amd64' ? 'x64' : 'arm64';
+  const source = resolve('frontend', 'node_modules', '@tokscale', `cli-win32-${platform}-msvc`, 'bin', 'tokscale.exe');
+  if (!existsSync(source)) throw new Error(`tokscale ${platform} がありません。node scripts/run.mjs setup を実行してください。`);
+  copyFileSync(source, resolve('bin', 'tokscale.exe'));
+}
 function run(cmd, args, extra = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', ...extra });
   if (result.error) throw result.error;
@@ -35,6 +42,7 @@ try {
   const command = process.argv[2];
   if (command === 'desktop' || command === 'desktop-dev') {
     if (!windows) throw new Error('Windows desktop build must be run on Windows.');
+    bundleTokscale();
     const production = command === 'desktop';
     // Identity and version come from app.json; the manifest file is a template.
     const manifest = readFileSync('build/windows/app.manifest', 'utf8').replaceAll('__APP_ID__', app.id).replaceAll('__APP_VERSION__', app.version);
@@ -43,6 +51,7 @@ try {
     const ldflags = ['-H windowsgui', ...overrides.map(([name, value]) => `-X 'main.${name}=${value}'`)].join(' ');
     run('go', ['build', '-trimpath', ...(production ? ['-tags', 'production'] : []), '-ldflags', ldflags, '-o', target, '.'], { env: { ...process.env, GOOS: 'windows', GOARCH: arch, CGO_ENABLED: '0' } });
   } else if (command === 'server') {
+    bundleTokscale();
     run('go', ['build', '-trimpath', '-tags', 'server,production', '-o', server, '.'], { env: { ...process.env, CGO_ENABLED: '0' } });
   } else if (command === 'run' || command === 'run-server') {
     run(command === 'run' ? target : server, []);

@@ -75,13 +75,17 @@ func loadFont(path string) (*opentype.Font, error) {
 	return collection.Font(0)
 }
 
-// Render draws stats as of now. Nil stats means no snapshot has arrived yet.
-func (r *Renderer) Render(stats *usage.Stats, now time.Time) *image.RGBA {
+// Render draws stats as of now. Nil stats means the selected source has no data yet.
+func (r *Renderer) Render(stats *usage.Stats, now time.Time, source string) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
 	draw.Draw(img, img.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
 	if stats == nil {
 		face := r.face(false, 64)
-		r.text(img, face, dim, (Width-measure(face, "Waiting for Hub"))/2, Height/2+22, "Waiting for Hub")
+		label := "Waiting for Hub"
+		if source == "Local" {
+			label = "Waiting for local usage"
+		}
+		r.text(img, face, dim, (Width-measure(face, label))/2, Height/2+22, label)
 		return img
 	}
 	r.tokens(img, stats.Periods)

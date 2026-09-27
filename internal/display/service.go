@@ -35,7 +35,8 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
-		img := renderer.Render(state.Latest(), time.Now())
+		stats, source := state.Snapshot()
+		img := renderer.Render(stats, time.Now(), source)
 		output(img)
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {

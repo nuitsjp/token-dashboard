@@ -39,7 +39,7 @@ func fieldErrors(t *testing.T, err error) map[string]string {
 func TestSaveKeepsSelectedDisplayWhileUnplugged(t *testing.T) {
 	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}, {ID: second, Name: "TURZX1.0 (8F21C4D0)"}}
 	s, _ := newService(t, &devices)
-	if _, err := s.Save(SaveRequest{URL: "https://hub.example.com", Token: "secret", DisplayID: second}); err != nil {
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "secret", DisplayID: second}); err != nil {
 		t.Fatal(err)
 	}
 	devices = devices[:1]
@@ -54,7 +54,7 @@ func TestSaveKeepsSelectedDisplayWhileUnplugged(t *testing.T) {
 		t.Fatalf("unplugged display = %+v", d)
 	}
 	// Saving again while unplugged keeps the selection and its name.
-	if _, err := s.Save(SaveRequest{URL: "https://hub.example.com", DisplayID: second}); err != nil {
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", DisplayID: second}); err != nil {
 		t.Fatal(err)
 	}
 	if view, _ := s.Get(); view.Displays[1].Name != "TURZX1.0 (8F21C4D0)" {
@@ -65,7 +65,7 @@ func TestSaveKeepsSelectedDisplayWhileUnplugged(t *testing.T) {
 func TestSaveRejectsUnknownDisplay(t *testing.T) {
 	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}}
 	s, path := newService(t, &devices)
-	_, err := s.Save(SaveRequest{URL: "https://hub.example.com", Token: "secret", DisplayID: second})
+	_, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "secret", DisplayID: second})
 	if fieldErrors(t, err)["displayID"] == "" {
 		t.Fatalf("err = %v", err)
 	}
@@ -78,17 +78,17 @@ func TestSaveValidatesURLAndToken(t *testing.T) {
 	devices := []turzx.Device{}
 	s, _ := newService(t, &devices)
 	for _, url := range []string{"", "ftp://hub", "https://", "https://user@hub", "https://hub/api", "https://hub?x=1", "https://hub#x"} {
-		if fieldErrors(t, mustFail(t, s, SaveRequest{URL: url, Token: "secret"}))["url"] == "" {
+		if fieldErrors(t, mustFail(t, s, SaveRequest{Source: "Hub", URL: url, Token: "secret"}))["url"] == "" {
 			t.Errorf("accepted %q", url)
 		}
 	}
-	if fieldErrors(t, mustFail(t, s, SaveRequest{URL: "https://hub"}))["token"] == "" {
+	if fieldErrors(t, mustFail(t, s, SaveRequest{Source: "Hub", URL: "https://hub"}))["token"] == "" {
 		t.Error("accepted a missing token")
 	}
-	if fieldErrors(t, mustFail(t, s, SaveRequest{URL: "https://hub", Token: "a\nb"}))["token"] == "" {
+	if fieldErrors(t, mustFail(t, s, SaveRequest{Source: "Hub", URL: "https://hub", Token: "a\nb"}))["token"] == "" {
 		t.Error("accepted a control character")
 	}
-	view, err := s.Save(SaveRequest{URL: " http://127.0.0.1:8080/ ", Token: "secret"})
+	view, err := s.Save(SaveRequest{Source: "Hub", URL: " http://127.0.0.1:8080/ ", Token: "secret"})
 	if err != nil || view.URL != "http://127.0.0.1:8080" {
 		t.Fatalf("view = %+v, %v", view, err)
 	}
@@ -106,10 +106,10 @@ func mustFail(t *testing.T, s *Service, req SaveRequest) error {
 func TestSaveEncryptsAndKeepsTokenWhenBlank(t *testing.T) {
 	devices := []turzx.Device{}
 	s, path := newService(t, &devices)
-	if _, err := s.Save(SaveRequest{URL: "https://hub.example.com", Token: "first-secret"}); err != nil {
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "first-secret"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Save(SaveRequest{URL: "https://other.example.com"}); err != nil {
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://other.example.com"}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -137,7 +137,7 @@ func TestUnreadableFileIsNotOverwritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	var public *fault.Error
-	if _, err := s.Save(SaveRequest{URL: "https://hub", Token: "secret"}); !errors.As(err, &public) || public.Code != "SETTINGS_UNREADABLE" {
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub", Token: "secret"}); !errors.As(err, &public) || public.Code != "SETTINGS_UNREADABLE" {
 		t.Fatalf("err = %v", err)
 	}
 	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "bm90LWRwYXBp") {

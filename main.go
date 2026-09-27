@@ -23,6 +23,7 @@ import (
 	"token-monitor-turzx/internal/display"
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/hub"
+	"token-monitor-turzx/internal/localusage"
 	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
@@ -118,7 +119,6 @@ func run() error {
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
-	mock := !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock"
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	renderer, err := display.NewRenderer()
 	if err != nil {
@@ -130,7 +130,7 @@ func run() error {
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	options := application.Options{
-		Name: cfg.Name, Description: "Token Monitor Hub の利用状況を TURZX に表示する常駐アプリ", Logger: logger,
+		Name: cfg.Name, Description: "利用状況を TURZX に表示する常駐アプリ", Logger: logger,
 		Assets:       application.AssetOptions{Handler: application.BundledAssetFileServer(root), DisableLogging: true},
 		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService), application.NewService(displayService)},
 		MarshalError: fault.Marshal,
@@ -166,17 +166,19 @@ func run() error {
 		sink = output.Submit
 	}
 	go display.Run(ctx, displayService, renderer, usageState, sink, emit, logger)
-	receiver := hub.New(func() (string, string, error) { return settings.Connection(settingsService) }, usageState, logger)
-	settingsService.OnSaved = receiver.Restart
-	go receiver.Run(ctx)
+	sourceChanged := make(chan struct{}, 1)
+	settingsService.OnSaved = func() {
+		select {
+		case sourceChanged <- struct{}{}:
+		default:
+		}
+	}
+	go runUsageSource(ctx, settingsService, usageState, logger, sourceChanged)
 	updateReady := func(string) {}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
 		// The title bar is the only place that shows the name and version.
 		title := cfg.Name + " v" + cfg.Version
-		if mock {
-			title += " (Mock data)"
-		}
 		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: title, Width: 1160, Height: 800, URL: "/", Hidden: true,
 			Windows: application.WindowsWindow{Theme: application.Dark}})
 		window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -234,6 +236,47 @@ func run() error {
 		})
 	}
 	return app.Run()
+}
+
+func runUsageSource(ctx context.Context, service *settings.Service, state *usage.State, logger *slog.Logger, changed <-chan struct{}) {
+	for {
+		source, err := settings.Source(service)
+		var cancel context.CancelFunc
+		var done chan struct{}
+		if err != nil {
+			logger.Warn("usage_source_unavailable", "cause", err)
+		} else {
+			state.SetSource(source)
+			child, stop := context.WithCancel(ctx)
+			cancel, done = stop, make(chan struct{})
+			go func() {
+				defer close(done)
+				if source == "Hub" {
+					hub.New(func() (string, string, error) { return settings.Connection(service) }, state, logger).Run(child)
+				} else {
+					path, err := os.Executable()
+					if err != nil {
+						logger.Warn("local_usage_unavailable", "cause", err)
+						return
+					}
+					localusage.New(filepath.Join(filepath.Dir(path), "tokscale.exe"), state, logger).Run(child)
+				}
+			}()
+		}
+		select {
+		case <-ctx.Done():
+			if cancel != nil {
+				cancel()
+				<-done
+			}
+			return
+		case <-changed:
+			if cancel != nil {
+				cancel()
+				<-done
+			}
+		}
+	}
 }
 func serverPort() (int, error) {
 	if s := os.Getenv("WAILS_SERVER_PORT"); s != "" {

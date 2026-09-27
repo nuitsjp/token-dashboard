@@ -15,6 +15,7 @@
 
 - **動作環境**: Windows 11（x64）と WebView2 Runtime が必要です。表示先は TURZX 9.2インチ（USB `1CBE:0092`）で、WinUSB ドライバーが設定済みであることを前提にします。表示中はメーカーのソフトを終了しておきます。
 - **受信**: Hub は1つだけです。`GET /api/stats/stream` に SSE で接続し、Bearer 認証と `x-token-monitor-stream: 2` を付けます。受信が止まったときは、待ち時間を1秒から倍にしながら（上限60秒）再接続を続けます。
+- **ローカル取得**: アプリに同梱する tokscale 4.17.0 の Windows 用実行ファイルから、この端末の Today・Month・All のトークン数と推定コスト、利用枠を取得します。取得は起動直後と5分ごとに行い、取得失敗時は選択した取得元を維持して次回に再試行します。利用者による tokscale の別途インストールは不要です。
 - **保存しないもの**: 受信した利用状況はメモリにだけ持ち、ファイルや DB には保存しません。起動後に最初の snapshot を受信するまでは、利用状況の値を表示しません。
 - **保存するもの**: Hub の接続先 URL と認証トークンは1組にまとめ、Windows の DPAPI でユーザー単位に暗号化して、ユーザーごとの設定領域に保存します。認証トークンはログにも画面表示にも出しません。
 - **Usage Limits の表示**: Hub が報告した枠のうち、メーターを表示する指定（`showMeter`）が付いたものを、残量の割合が小さい枠を持つ契約から順に、表示領域に収まる件数だけ表示します。
@@ -50,6 +51,11 @@
 - 利用枠は `stats.limits.providers[]` にアカウントごとに並び、各要素が `provider`・`accountLabel`・`planLabel` と `windows[]` を持ちます。`windows[]` の各要素は `kind`（`session`・`daily`・`weekly`・`billing`）、`showMeter`、`remainingPercent`、`usedPercent`、`resetsAt`、`label` を持ちます。`showMeter` が偽の枠は残量の割合を表示に使いません。
 - 2026-09-27 に利用者の Hub へ接続し、最初の `snapshot` のキー名と型だけを確認しました（値は記録していません）。`periods` の3期間すべてに `totalTokens` と `costUsd` があり、`limits.providers` は21件、そのうち `showMeter` が真の枠を持つのは6件で、枠は合計14件でした。
 
+### tokscale
+
+- 情報源は [junhoyeo/tokscale v4.17.0](https://github.com/junhoyeo/tokscale/tree/v4.17.0) です。Windows 用のネイティブ実行ファイルを同梱し、`--today --json`・`--month --json`・`--json`・`usage --json` を呼び出します。
+- 2026-09-27 にこの PC で v4.17.0 の JSON 出力を確認しました。期間集計は `totalInput`・`totalOutput`・`totalCacheRead`・`totalCacheWrite`・`totalCost` を持ち、利用枠はプロバイダーごとの `metrics` に `label`・`used_percent`・`remaining_percent`・`resets_at` を持ちました。
+
 ### TURZX 9.2インチ
 
 - 情報源は [nuitsjp/Turzx.Net](https://github.com/nuitsjp/Turzx.Net) の `7f164ba89a229db900171bc02f608c47bdbeed5e` のソースと `docs/technical-notes.md`（2026-09-27 に実機で検証済み）です。
@@ -74,10 +80,9 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 
 | 目的 | コマンド | 期待結果 |
 | --- | --- | --- |
-| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
+| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存（同梱用 tokscale を含む）、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 設定サービスの固定データを有効にして起動します。取得元の初期値は `Local`、表示先は `Automatic` と固定の TURZX 2台です。`Local` と表示先を選んで `Save` を押すと、モックのメモリ上の設定が更新され、`Saved.` を表示します。ウィンドウのタイトルの末尾に `(Mock data)` が表示されます。`dev` で起動したときは表示されません |
-| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
+| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
@@ -86,8 +91,6 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | リリース | `mise run release:tag`（版を指定するときは `mise run release:tag 1.2.0`） | 最新のタグ（タグがなければ `build/app.json` の `version`）の patch を1つ上げた `v<版>` のタグを、指定したときはその版のタグを push します。コミットしていない変更がない状態で、`origin/main` に含まれるコミットで実行します。push したタグで CI が検証、インストーラーの作成、`update.json` の署名、GitHub Releases の最新リリースへの公開を行い、各 PC のアプリが次の起動時に新版として取得します |
 
 デスクトップ版のビルドとインストーラーの作成では、環境変数 `BUILD_APP_VERSION`・`BUILD_UPDATE_SOURCE`・`BUILD_UPDATE_PUBLIC_KEY` を指定すると、版番号・更新元・公開鍵を、`build/app.json` の代わりにその値にします（指定しない項目は `build/app.json` の値のまま）。値はビルド時に実行ファイルへ埋め込み、実行時の環境変数では変わりません。リリースの CI は `BUILD_APP_VERSION` だけをタグの版にし、更新の E2E は3つとも指定して、手元の更新元を使う版を作ります。
-
-モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
 
 接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
 

@@ -90,6 +90,8 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     await test.step('開始条件', async () => {
       // Precondition: the Hub connection is saved. Then the app starts as at sign-in.
       await page.goto(server.url);
+      await page.getByRole('textbox', { name: 'Data source' }).click();
+      await page.getByRole('option', { name: 'Hub' }).click();
       await page.getByLabel('Hub URL').fill(hub.url);
       await page.getByLabel(/Access token/).fill(token);
       await page.getByRole('button', { name: 'Save' }).click();

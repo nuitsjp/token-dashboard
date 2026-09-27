@@ -65,12 +65,12 @@ try {
   } else if (command === 'tag') {
     tagRelease(args[0]);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | test:desktop | tag [version] | release <args>');
+    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | tag [version] | release <args>');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
-    if (command === 'dev' || command === 'dev:mock') {
+    if (command === 'dev') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
-      run(cli, ['dev'], root, { WAILS_FRONTEND_MODE: command === 'dev:mock' ? 'mock' : 'real' });
+      run(cli, ['dev']);
     } else if (command === 'test:desktop') {
       // Installs, updates and uninstalls the desktop app; never part of verify.
       run(cli, ['task', 'build:server']);

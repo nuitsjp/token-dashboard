@@ -13,10 +13,6 @@ run = "node scripts/run.mjs setup"
 description = "アプリを開発起動する"
 run = "node scripts/run.mjs dev"
 
-[tasks."dev:mock"]
-description = "確認用モックを有効にして開発起動する"
-run = "node scripts/run.mjs dev:mock"
-
 [tasks.build]
 description = "本番実行ファイルを bin/ に作る"
 run = "node scripts/run.mjs build"

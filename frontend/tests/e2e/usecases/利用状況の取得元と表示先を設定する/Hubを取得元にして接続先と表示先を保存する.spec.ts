@@ -13,8 +13,10 @@ test('保存した接続先と表示先を、再起動後も復元する', async
   const token = page.getByLabel(/Access token/);
   const device = page.getByRole('textbox', { name: 'Output device' });
   try {
-    await test.step('開始条件', async () => {
+    await test.step('分岐条件', async () => {
       await page.goto(server.url);
+      await page.getByRole('textbox', { name: 'Data source' }).click();
+      await page.getByRole('option', { name: 'Hub' }).click();
     });
     await test.step('手順1', async () => {
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();

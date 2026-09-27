@@ -1,4 +1,4 @@
-// Package settings owns the Hub connection and the TURZX display selection.
+// Package settings owns the usage source, Hub connection, and TURZX display selection.
 package settings
 
 import (
@@ -38,7 +38,7 @@ type View struct {
 
 type SaveRequest struct {
 	Source string `json:"source"`
-	URL string `json:"url"`
+	URL    string `json:"url"`
 	// An empty token keeps the saved one.
 	Token     string `json:"token"`
 	DisplayID string `json:"displayID"`
@@ -46,7 +46,8 @@ type SaveRequest struct {
 
 // file is the on-disk format described in docs/design/data.md.
 type file struct {
-	Connection  string `json:"connection"`
+	Source      string `json:"source"`
+	Connection  string `json:"connection,omitempty"`
 	DisplayID   string `json:"displayID"`
 	DisplayName string `json:"displayName"`
 }
@@ -98,20 +99,27 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		return View{}, err
 	}
 	fields := map[string]string{}
-	origin, ok := parseOrigin(req.URL)
-	if !ok {
-		fields["url"] = "Enter an http:// or https:// URL with a host and an optional port."
+	if req.Source != "Local" && req.Source != "Hub" {
+		fields["source"] = "Choose Local or Hub."
 	}
-	token := strings.TrimSpace(req.Token)
-	if token == "" {
-		token = conn.Token
+	var origin, token string
+	if req.Source == "Hub" {
+		var ok bool
+		origin, ok = parseOrigin(req.URL)
+		if !ok {
+			fields["url"] = "Enter an http:// or https:// URL with a host and an optional port."
+		}
+		token = strings.TrimSpace(req.Token)
+		if token == "" {
+			token = conn.Token
+		}
+		if token == "" {
+			fields["token"] = "Enter the access token."
+		} else if strings.ContainsFunc(token, unicode.IsControl) {
+			fields["token"] = "The access token must not contain control characters."
+		}
 	}
-	if token == "" {
-		fields["token"] = "Enter the access token."
-	} else if strings.ContainsFunc(token, unicode.IsControl) {
-		fields["token"] = "The access token must not contain control characters."
-	}
-	next := file{DisplayID: req.DisplayID}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID}
 	if req.DisplayID != "" {
 		if i := slices.IndexFunc(devices, func(d turzx.Device) bool { return d.ID == req.DisplayID }); i >= 0 {
 			next.DisplayName = devices[i].Name
@@ -124,16 +132,18 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if len(fields) > 0 {
 		return View{}, fault.Validation(fields)
 	}
-	conn = connection{URL: origin, Token: token}
-	plain, err := json.Marshal(conn)
-	if err != nil {
-		return View{}, err
+	if req.Source == "Hub" {
+		conn = connection{URL: origin, Token: token}
+		plain, err := json.Marshal(conn)
+		if err != nil {
+			return View{}, err
+		}
+		sealed, err := protect(plain, s.entropy)
+		if err != nil {
+			return View{}, err
+		}
+		next.Connection = base64.StdEncoding.EncodeToString(sealed)
 	}
-	sealed, err := protect(plain, s.entropy)
-	if err != nil {
-		return View{}, err
-	}
-	next.Connection = base64.StdEncoding.EncodeToString(sealed)
 	if err := s.write(next); err != nil {
 		return View{}, err
 	}
@@ -149,7 +159,7 @@ func (s *Service) read() (file, connection, error) {
 	var conn connection
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return saved, conn, nil
+		return file{Source: "Local"}, conn, nil
 	}
 	if err != nil {
 		return saved, conn, err
@@ -157,6 +167,17 @@ func (s *Service) read() (file, connection, error) {
 	unreadable := fault.New("SETTINGS_UNREADABLE", "The saved settings cannot be read. They may belong to another Windows user.")
 	if err := json.Unmarshal(data, &saved); err != nil {
 		return saved, conn, unreadable
+	}
+	if saved.Source == "" {
+		saved.Source = "Local"
+	} else if saved.Source != "Local" && saved.Source != "Hub" {
+		return saved, conn, unreadable
+	}
+	if saved.Connection == "" {
+		if saved.Source == "Hub" {
+			return saved, conn, unreadable
+		}
+		return saved, conn, nil
 	}
 	sealed, err := base64.StdEncoding.DecodeString(saved.Connection)
 	if err != nil {
@@ -209,7 +230,7 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 	if saved.DisplayID != "" && !slices.ContainsFunc(devices, func(d turzx.Device) bool { return d.ID == saved.DisplayID }) {
 		displays = append(displays, Display{DeviceID: saved.DisplayID, Name: saved.DisplayName})
 	}
-	return View{URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays}
+	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays}
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -248,4 +269,12 @@ func Connection(s *Service) (string, string, error) {
 	defer s.mu.Unlock()
 	_, conn, err := s.read()
 	return conn.URL, conn.Token, err
+}
+
+// Source returns the saved usage source without exposing it as a Wails method.
+func Source(s *Service) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	return saved.Source, err
 }

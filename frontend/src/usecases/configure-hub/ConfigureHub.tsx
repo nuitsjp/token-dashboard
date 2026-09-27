@@ -37,7 +37,7 @@ function Editor({ saved }: { saved: View }) {
     <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xl">
       <Stack gap="sm">
         <Title order={5}>Usage source</Title>
-        <Select label="Data source" data={['Local', 'Hub']} value={source} allowDeselect={false}
+        <Select label="Data source" data={['Local', 'Hub']} value={source} allowDeselect={false} error={fields.source}
           onChange={value => { if (value) { setSource(value); setDone(false); } }} />
       </Stack>
       <Stack gap="sm">
