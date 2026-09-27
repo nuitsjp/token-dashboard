@@ -37,6 +37,10 @@ run = "node scripts/run.mjs verify"
 description = "Go のテストを実行する"
 run = "node scripts/run.mjs test:core"
 
+[tasks."test:desktop"]
+description = "デスクトップ版をインストールして更新する E2E を実行する（手元で実行）"
+run = "node scripts/run.mjs test:desktop"
+
 [tasks.release]
 description = "更新用の鍵と更新情報を作る（引数は scripts/run.mjs release へ渡す）"
 run = "node scripts/run.mjs release"

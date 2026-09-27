@@ -35,12 +35,16 @@ try {
     run('npm', [existsSync('frontend/package-lock.json') ? 'ci' : 'install', '--no-audit', '--no-fund'], resolve('frontend'));
     run(cli, ['task', 'generate']);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | release <args>');
+    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | test:desktop | release <args>');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
     if (command === 'dev' || command === 'dev:mock') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
       run(cli, ['dev'], root, { WAILS_FRONTEND_MODE: command === 'dev:mock' ? 'mock' : 'real' });
+    } else if (command === 'test:desktop') {
+      // Installs, updates and uninstalls the desktop app; never part of verify.
+      run(cli, ['task', 'build:server']);
+      run('npm', ['--prefix', 'frontend', 'run', 'test:e2e', '--', '--grep', '@desktop'], root, { DESKTOP_E2E: '1' });
     } else if (command === 'release') {
       run('go', ['run', './cmd/release', ...args]);
     } else if (['build', 'package', 'server', 'verify', 'test:core', 'generate'].includes(command)) {

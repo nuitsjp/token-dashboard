@@ -81,6 +81,7 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
+| 更新の E2E | `node scripts/run.mjs test:desktop` | 「起動時に取得した新版で更新して再起動する」の E2E が合格します。v0.1.0 と v0.2.0 のインストーラーを作り、実際にインストールして更新し、最後にアンインストールします。動いている Token Monitor TURZX をすべて止め、インストールしていない状態で、手元で実行します。`verify` には含めません |
 | インストーラーの作成 | `node scripts/run.mjs package` | `bin\token-monitor-turzx-<版>-amd64-setup.exe` ができます。版は `build/app.json` の `version` です |
 | 更新情報の作成 | `node scripts/run.mjs release manifest -key $env:USERPROFILE\.token-monitor-turzx\release-signing.key -installer bin\token-monitor-turzx-<版>-amd64-setup.exe -app-id io.github.nuitsjp.token-monitor-turzx -version <版> -out bin` | `bin\update.json` ができます。インストーラーと `update.json` を GitHub Releases の最新リリースに置くと、各 PC のアプリが次の起動時に新版として取得します |
 
@@ -90,6 +91,6 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 
 接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
 
-E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-tags server` のビルド）を操作します。検証用サーバーにはタスクトレイがないため、ページを開くことでトレイからウィンドウを開く操作に、プロセスの停止と起動で `Exit` と再起動に代えます。表示先の選択と `(Disconnected)` の保持は機器の接続状態に依存するため、機器の一覧を差し替えられる Go の単体テスト（`internal/settings`）で検証し、タスクトレイの操作は実機で確認します。
+E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-tags server` のビルド）を操作します。検証用サーバーにはタスクトレイがないため、ページを開くことでトレイからウィンドウを開く操作に、プロセスの停止と起動で `Exit` と再起動に代えます。表示先の選択と `(Disconnected)` の保持は機器の接続状態に依存するため、機器の一覧を差し替えられる Go の単体テスト（`internal/settings`）で検証し、タスクトレイの操作は実機で確認します。更新の E2E だけは、インストールした本番ビルドのウィンドウを Windows の UI オートメーションで操作します。アプリをもう一度起動して既存のウィンドウを表示させることで、トレイからウィンドウを開く操作に代えます。タスクトレイのメニューの更新項目は実機で確認します。署名・対象・ハッシュが一致しない場合と、適用前の再検証の失敗は、Go の単体テスト（`internal/updates`）で検証します。
 
 開発時に Playwright CLI からウィンドウを操作する場合は、環境変数 `WAILS_WEBVIEW_DEBUG_PORT` にポート番号を指定して起動し、`playwright-cli attach --cdp=http://127.0.0.1:<ポート番号>` で接続します。この環境変数は本番ビルドでは無視します。ウィンドウは表示するまで WebView2 を作らないため、先にウィンドウを開いてから接続します。
