@@ -76,7 +76,7 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているものはありません |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。更新元を、データフォルダーの `mock-release` に作る v0.2.0 の署名付き `update.json` と偽のインストーラーへ差し替えます。起動の10秒後に新版の確認を始め、`Update and restart` を押すとインストーラーは実行せずにアプリを終了します |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |

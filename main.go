@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -104,10 +105,19 @@ func run() error {
 	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
-	updateService := updates.New(updates.Config{
+	updateConfig := updates.Config{
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
-	}, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
+	}
+	launch := updates.LaunchInstaller
+	updateDelay := time.Duration(0)
+	if !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock" {
+		if launch, err = mockRelease(dir, &updateConfig, logger); err != nil {
+			return err
+		}
+		updateDelay = mockUpdateDelay
+	}
+	updateService := updates.New(updateConfig, state, logger, emit, launch, controls.ApproveQuit)
 	renderer, err := display.NewRenderer()
 	if err != nil {
 		return err
@@ -157,6 +167,7 @@ func run() error {
 	receiver := hub.New(func() (string, string, error) { return settings.Connection(settingsService) }, usageState, logger)
 	settingsService.OnSaved = receiver.Restart
 	go receiver.Run(ctx)
+	updateReady := func(string) {}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
 		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})
@@ -170,6 +181,7 @@ func run() error {
 			window.Focus()
 		}
 		menu := application.NewMenu()
+		update := menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {
@@ -186,7 +198,34 @@ func run() error {
 		tray.SetTooltip(cfg.Name)
 		tray.SetMenu(menu)
 		tray.OnClick(show)
+		setUpdate := func(label string) {
+			application.InvokeSync(func() {
+				update.SetLabel(label).SetHidden(label == "")
+				// The Windows tray builds its popup when the menu is set.
+				tray.SetMenu(menu)
+			})
+		}
+		update.OnClick(func(*application.Context) {
+			// Same path as the window's button; a failure keeps the app running.
+			if err := updateService.Apply(); err != nil {
+				setUpdate("")
+				show()
+				return
+			}
+			app.Quit()
+		})
+		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(updateDelay):
+			}
+			updates.Run(ctx, updateService, updateReady)
+		}()
+	})
 	return app.Run()
 }
 func serverPort() (int, error) {
