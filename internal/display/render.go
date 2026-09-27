@@ -2,12 +2,15 @@
 package display
 
 import (
+	"cmp"
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
+	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -82,44 +85,37 @@ func (r *Renderer) Render(stats *usage.Stats, now time.Time) *image.RGBA {
 		return img
 	}
 	r.tokens(img, stats.Periods)
-	fill(img, image.Rect(40, 118, Width-40, 120), divider)
 	r.limits(img, stats.Limits, now)
 	return img
 }
 
-// tokens draws Today, Month and All in one row, each as label, tokens and cost side by side.
-// The three blocks sit at the left, centre and right; large numbers shrink until they fit.
+// tokensRight is the right edge of the Tokens column at the left of the image.
+const tokensRight = 330
+
+// tokens draws Today, Month and All from top to bottom, each as label and cost on one line
+// with the tokens below. The tokens shrink until they fit the column.
 func (r *Renderer) tokens(img *image.RGBA, periods usage.Periods) {
-	blocks := []struct{ label, tokens, cost string }{
-		{"Today", commas(fmt.Sprint(periods.Today.TotalTokens)), usd(periods.Today.CostUSD)},
-		{"Month", commas(fmt.Sprint(periods.Month.TotalTokens)), usd(periods.Month.CostUSD)},
-		{"All", commas(fmt.Sprint(periods.AllTime.TotalTokens)), usd(periods.AllTime.CostUSD)},
-	}
-	var label, value, cost font.Face
-	widths := make([]int, len(blocks))
-	for size := 48.0; ; size -= 2 {
-		label, value, cost = r.face(false, size*28/48), r.face(true, size), r.face(false, size*36/48)
-		total := 0
-		for i, b := range blocks {
-			widths[i] = measure(label, b.label) + 16 + measure(value, b.tokens) + 16 + measure(cost, b.cost)
-			total += widths[i]
-		}
-		if total+2*48 <= Width-80 || size <= 28 {
-			break
-		}
-	}
-	lefts := []int{40, (Width - widths[1]) / 2, Width - 40 - widths[2]}
+	blocks := []struct {
+		label  string
+		period usage.Period
+	}{{"Today", periods.Today}, {"Month", periods.Month}, {"All", periods.AllTime}}
+	label, cost := r.face(false, 20), r.face(false, 22)
 	for i, b := range blocks {
-		x := lefts[i]
-		r.text(img, label, dim, x, 84, b.label)
-		x += measure(label, b.label) + 16
-		r.text(img, value, text, x, 84, b.tokens)
-		x += measure(value, b.tokens) + 16
-		r.text(img, cost, accent, x, 84, b.cost)
+		top := 30 + i*140
+		r.text(img, label, dim, 40, top+28, b.label)
+		c := usd(b.period.CostUSD)
+		r.text(img, cost, accent, tokensRight-measure(cost, c), top+28, c)
+		tokens := commas(fmt.Sprint(b.period.TotalTokens))
+		size := 42.0
+		for size > 20 && measure(r.face(true, size), tokens) > tokensRight-40 {
+			size -= 2
+		}
+		r.text(img, r.face(true, size), text, 40, top+36+int(size), tokens)
 	}
+	fill(img, image.Rect(tokensRight+26, 30, tokensRight+28, Height-30), divider)
 }
 
-// group is one contract: the windows of a provider that show a meter.
+// group is one contract: the windows of a provider that show a meter, up to barRows.
 type group struct {
 	name, plan string
 	windows    []usage.Window
@@ -133,7 +129,7 @@ func groups(limits usage.Limits) []group {
 			g.plan = p.AccountLabel
 		}
 		for _, w := range p.Windows {
-			if w.ShowMeter {
+			if w.ShowMeter && len(g.windows) < barRows {
 				g.windows = append(g.windows, w)
 			}
 		}
@@ -144,85 +140,102 @@ func groups(limits usage.Limits) []group {
 	return out
 }
 
+// lowest is the smallest remaining percent of the group; a group without any reports above 100.
+func (g group) lowest() float64 {
+	low := math.Inf(1)
+	for _, w := range g.windows {
+		if w.RemainingPercent != nil {
+			low = min(low, *w.RemainingPercent)
+		}
+	}
+	return low
+}
+
 const (
-	limitsTop    = 136
-	columns      = 5
-	columnGap    = 40
-	columnWidth  = (Width - 80 - (columns-1)*columnGap) / columns
-	headerHeight = 66
-	rowHeight    = 64
+	limitsLeft   = tokensRight + 54
+	limitsTop    = 26
+	columns      = 4
+	columnGap    = 28
+	columnWidth  = (Width - 40 - limitsLeft - (columns-1)*columnGap) / columns
+	headerHeight = 54
+	rowHeight    = 72
 	barRows      = 4
-	stackGap     = 36
+	stackGap     = 18
+	columnRows   = 4 // windows per column
+	columnGroups = 2 // contracts per column
 )
 
-// height is the drawn height of a group: its header and up to four bar rows.
-func (g group) height() int { return headerHeight + (min(len(g.windows), barRows)-1)*rowHeight + 42 }
-
-// layout places groups into columns in Hub order. A group with a single window is stacked
-// under the earlier single-window groups while their column has room.
+// layout sorts groups by their lowest remaining percent, keeping Hub order for ties, and puts
+// each under the leftmost column that stays within columnRows windows and columnGroups contracts.
+// A group that would need a fifth column is not shown.
 func layout(gs []group) [][]group {
+	sorted := slices.Clone(gs)
+	slices.SortStableFunc(sorted, func(a, b group) int { return cmp.Compare(a.lowest(), b.lowest()) })
 	var out [][]group
-	singles, used := -1, 0
-	for _, g := range gs {
-		if len(g.windows) == 1 && singles >= 0 && used+stackGap+g.height() <= Height-limitsTop {
-			out[singles] = append(out[singles], g)
-			used += stackGap + g.height()
-			continue
+	rows := []int{}
+	for _, g := range sorted {
+		placed := false
+		for i := range out {
+			if len(out[i]) < columnGroups && rows[i]+len(g.windows) <= columnRows {
+				out[i] = append(out[i], g)
+				rows[i] += len(g.windows)
+				placed = true
+				break
+			}
 		}
-		if len(out) == columns {
-			continue // a later single-window group may still fit under the others
+		if !placed && len(out) < columns {
+			out = append(out, []group{g})
+			rows = append(rows, len(g.windows))
 		}
-		if len(g.windows) == 1 {
-			singles, used = len(out), g.height()
-		}
-		out = append(out, []group{g})
 	}
 	return out
 }
 
-// limits draws contracts left to right, each with its name and plan above its bars.
+// limits draws the columns left to right, each contract with its name and plan on one line
+// above its bars.
 func (r *Renderer) limits(img *image.RGBA, limits usage.Limits, now time.Time) {
+	name, plan := r.face(true, 36), r.face(false, 24)
 	for i, column := range layout(groups(limits)) {
-		x, y := 40+i*(columnWidth+columnGap), limitsTop
+		x, y := limitsLeft+i*(columnWidth+columnGap), limitsTop
 		for _, g := range column {
-			r.text(img, r.face(true, 28), text, x, y+26, truncate(r.face(true, 28), g.name, columnWidth))
-			r.text(img, r.face(false, 20), dim, x, y+52, truncate(r.face(false, 20), g.plan, columnWidth))
+			n := truncate(name, g.name, columnWidth)
+			r.text(img, name, text, x, y+33, n)
+			if px := x + measure(name, n) + 14; px < x+columnWidth {
+				r.text(img, plan, dim, px, y+33, truncate(plan, g.plan, x+columnWidth-px))
+			}
 			r.bars(img, g, x, y+headerHeight, now)
-			y += g.height() + stackGap
+			y += headerHeight + len(g.windows)*rowHeight + stackGap
 		}
 	}
 }
 
-// bars draws up to four windows as labelled bars. The times until reset share one right edge
-// so they line up across rows.
+// bars draws each window as a line of label, time until reset and remaining percent, with a bar
+// across the column below. The times until reset share one right edge so they line up.
 func (r *Renderer) bars(img *image.RGBA, g group, x, y int, now time.Time) {
-	big, small := r.face(true, 24), r.face(false, 18)
-	resetRight := x + columnWidth - measure(big, "100%") - 16
+	big, label, small := r.face(true, 28), r.face(false, 21), r.face(false, 19)
+	resetRight := x + columnWidth - measure(big, "100%") - 14
 	for i, w := range g.windows {
-		if i == barRows {
-			break
-		}
-		top := y + i*rowHeight
+		base := y + i*rowHeight + 25
 		percent := "—"
 		if w.RemainingPercent != nil {
 			percent = fmt.Sprintf("%.0f%%", *w.RemainingPercent)
 		}
-		r.text(img, big, text, x+columnWidth-measure(big, percent), top+22, percent)
+		r.text(img, big, text, x+columnWidth-measure(big, percent), base, percent)
 		reset := ""
 		if w.ResetsAt != nil {
 			reset = remaining(w.ResetsAt.Sub(now))
 		}
 		rw := measure(small, reset)
-		r.text(img, small, dim, resetRight-rw, top+22, reset)
-		label := w.Label
-		if label == "" {
-			label = w.Kind
+		r.text(img, small, dim, resetRight-rw, base, reset)
+		name := w.Label
+		if name == "" {
+			name = w.Kind
 		}
-		r.text(img, small, text, x, top+22, truncate(small, label, resetRight-rw-12-x))
-		fill(img, image.Rect(x, top+32, x+columnWidth, top+42), track)
+		r.text(img, label, text, x, base, truncate(label, name, resetRight-rw-10-x))
+		fill(img, image.Rect(x, base+12, x+columnWidth, base+26), track)
 		if w.RemainingPercent != nil {
 			v := min(max(*w.RemainingPercent, 0), 100)
-			fill(img, image.Rect(x, top+32, x+int(float64(columnWidth)*v/100), top+42), meterColor(v))
+			fill(img, image.Rect(x, base+12, x+int(float64(columnWidth)*v/100), base+26), meterColor(v))
 		}
 	}
 }
