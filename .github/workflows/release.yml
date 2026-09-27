@@ -1,0 +1,61 @@
+name: Release
+# Started by the tag that `mise run release:tag` pushes. Builds the installer with the
+# tag's version, signs update.json and publishes both as the latest GitHub release.
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Dependencies and generated sources
+        run: node scripts/run.mjs setup
+      - name: Browser
+        working-directory: frontend
+        run: npx playwright install --only-shell chromium
+      - name: Verify
+        run: node scripts/run.mjs verify
+      - name: NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Installer
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.Substring(1)
+          "VERSION=$version" >> $env:GITHUB_ENV
+          $env:BUILD_APP_VERSION = $version
+          node scripts/run.mjs package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Signed update information
+        shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if (-not $env:UPDATE_SIGNING_KEY) { throw 'The UPDATE_SIGNING_KEY secret is not set.' }
+          $key = Join-Path $env:RUNNER_TEMP 'release-signing.key'
+          Set-Content -Path $key -Value $env:UPDATE_SIGNING_KEY -NoNewline
+          $app = Get-Content build/app.json -Raw | ConvertFrom-Json
+          node scripts/run.mjs release manifest -key $key -installer "bin/token-monitor-turzx-$env:VERSION-amd64-setup.exe" -app-id $app.id -version $env:VERSION -out bin
+          $code = $LASTEXITCODE
+          Remove-Item $key
+          if ($code -ne 0) { exit $code }
+      - name: GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ github.ref_name }}' "bin/token-monitor-turzx-$env:VERSION-amd64-setup.exe" bin/update.json --title '${{ github.ref_name }}' --generate-notes --verify-tag
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

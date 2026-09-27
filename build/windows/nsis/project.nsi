@@ -123,6 +123,8 @@ Section "Application"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}" "NoRepair" 1
   CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
   IfErrors failed
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_ID}" '$\"$INSTDIR\${APP_EXE}$\"'
+  IfErrors failed
   Goto done
 failed:
   MessageBox MB_ICONSTOP "インストールに失敗しました。同じインストーラーを手動で再実行してください。利用者データは削除していません。"
@@ -152,6 +154,7 @@ Section "Uninstall"
     MessageBox MB_ICONSTOP "アプリを終了してからアンインストールしてください。"
     Abort
   Delete "$SMPROGRAMS\${APP_NAME}.lnk"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_ID}"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
   DeleteRegKey HKCU "Software\${APP_ID}"

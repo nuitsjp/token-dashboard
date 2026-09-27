@@ -23,6 +23,34 @@ function run(command, args, cwd = root, extra = {}) {
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status || 1);
 }
+function git(...args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr.trim()}`);
+  return result.stdout.trim();
+}
+function parseVersion(text) {
+  const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(text ?? '')?.slice(1).map(Number);
+  return parts && parts.every(n => n <= 65535) ? parts : null;
+}
+const compareVersions = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+// Pushes a vX.Y.Z tag; the release workflow builds, signs and publishes it.
+function tagRelease(requested) {
+  git('fetch', '--tags', 'origin');
+  if (git('status', '--porcelain')) throw new Error('コミットしていない変更があります。');
+  if (spawnSync('git', ['merge-base', '--is-ancestor', 'HEAD', 'origin/main'], { cwd: root }).status !== 0) {
+    throw new Error('HEAD が origin/main に含まれていません。main にマージしてから実行してください。');
+  }
+  // Without a tag, the version in build/app.json counts as the latest.
+  const latest = git('tag', '--list', 'v*').split('\n').map(tag => parseVersion(tag.slice(1))).filter(Boolean)
+    .sort(compareVersions).at(-1) ?? parseVersion(JSON.parse(readFileSync(resolve(root, 'build/app.json'), 'utf8')).version);
+  const next = requested === undefined ? [latest[0], latest[1], latest[2] + 1] : parseVersion(requested);
+  if (!next) throw new Error('版は major.minor.patch（各 0〜65535）で指定してください。');
+  if (compareVersions(next, latest) <= 0) throw new Error(`v${latest.join('.')} より新しい版を指定してください。`);
+  const tag = `v${next.join('.')}`;
+  git('tag', tag);
+  git('push', 'origin', tag);
+  console.log(`${tag} を push しました。リリースは GitHub Actions の Release で作成されます。`);
+}
 const [command = 'help', ...args] = process.argv.slice(2);
 try {
   if (command === 'setup') {
@@ -34,13 +62,19 @@ try {
     run('go', ['mod', 'tidy']);
     run('npm', [existsSync('frontend/package-lock.json') ? 'ci' : 'install', '--no-audit', '--no-fund'], resolve('frontend'));
     run(cli, ['task', 'generate']);
+  } else if (command === 'tag') {
+    tagRelease(args[0]);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | release <args>');
+    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | test:desktop | tag [version] | release <args>');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
     if (command === 'dev' || command === 'dev:mock') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
       run(cli, ['dev'], root, { WAILS_FRONTEND_MODE: command === 'dev:mock' ? 'mock' : 'real' });
+    } else if (command === 'test:desktop') {
+      // Installs, updates and uninstalls the desktop app; never part of verify.
+      run(cli, ['task', 'build:server']);
+      run('npm', ['--prefix', 'frontend', 'run', 'test:e2e', '--', '--grep', '@desktop'], root, { DESKTOP_E2E: '1' });
     } else if (command === 'release') {
       run('go', ['run', './cmd/release', ...args]);
     } else if (['build', 'package', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
