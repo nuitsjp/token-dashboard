@@ -53,12 +53,78 @@ func TestSaveKeepsSelectedDisplayWhileUnplugged(t *testing.T) {
 	if d := view.Displays[1]; d.DeviceID != second || d.Name != "TURZX1.0 (8F21C4D0)" || d.Connected {
 		t.Fatalf("unplugged display = %+v", d)
 	}
+	if target, err := DisplayTarget(s); err != nil || target != second {
+		t.Fatalf("unplugged target = %q, %v", target, err)
+	}
 	// Saving again while unplugged keeps the selection and its name.
 	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", DisplayID: second}); err != nil {
 		t.Fatal(err)
 	}
 	if view, _ := s.Get(); view.Displays[1].Name != "TURZX1.0 (8F21C4D0)" {
 		t.Fatalf("view = %+v", view)
+	}
+}
+
+func TestDisplayTargetAutomaticUsesFirstConnected(t *testing.T) {
+	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}, {ID: second, Name: "TURZX1.0 (8F21C4D0)"}}
+	s, _ := newService(t, &devices)
+	if target, err := DisplayTarget(s); err != nil || target != first {
+		t.Fatalf("automatic target = %q, %v", target, err)
+	}
+}
+
+func TestSaveLocalWithoutHubConnectionAndReload(t *testing.T) {
+	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}}
+	s, path := newService(t, &devices)
+
+	view, err := s.Save(SaveRequest{Source: "Local", DisplayID: first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Source != "Local" || view.URL != "" || view.TokenSet || view.DisplayID != first {
+		t.Fatalf("view = %+v", view)
+	}
+
+	reloaded := New(path, "test.app", func() ([]turzx.Device, error) { return devices, nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	view, err = reloaded.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Source != "Local" || view.DisplayID != first {
+		t.Fatalf("reloaded view = %+v", view)
+	}
+	if source, err := Source(reloaded); err != nil || source != "Local" {
+		t.Fatalf("source = %q, %v", source, err)
+	}
+}
+
+func TestSaveLocalKeepsSavedConnection(t *testing.T) {
+	devices := []turzx.Device{}
+	s, _ := newService(t, &devices)
+	if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, err := s.read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Connection == "" {
+		t.Fatal("Hub connection was not saved")
+	}
+
+	view, err := s.Save(SaveRequest{Source: "Local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Source != "Local" || view.URL != "https://hub.example.com" || !view.TokenSet {
+		t.Fatalf("view = %+v", view)
+	}
+	after, _, err := s.read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Source != "Local" || after.Connection != saved.Connection {
+		t.Fatalf("saved file = %+v, before = %+v", after, saved)
 	}
 }
 
