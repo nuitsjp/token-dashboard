@@ -1,0 +1,53 @@
+version: '3'
+
+vars:
+  # 生成先の reference/ は親ディレクトリの共通検査器を使う。
+  DOC_CHECK: '{{if eq (osBase .ROOT_DIR) "reference"}}../{{end}}scripts/doc_check.py'
+
+tasks:
+  generate:
+    cmds:
+      - wails3 generate bindings -ts -i -names -f '-tags=server' -d frontend/bindings .
+      - npm --prefix frontend run routes
+  frontend:dev:
+    dir: frontend
+    cmds: [npm run dev]
+  build:dev:
+    cmds:
+      - task: generate
+      - npm --prefix frontend run build:dev
+      - node scripts/build.mjs desktop-dev
+  run:
+    cmds: [node scripts/build.mjs run]
+  build:
+    cmds:
+      - task: generate
+      - npm --prefix frontend run build
+      - node scripts/build.mjs desktop
+  build:server:
+    cmds:
+      - task: generate
+      - npm --prefix frontend run build
+      - node scripts/build.mjs server
+  server:
+    cmds:
+      - task: build:server
+      - node scripts/build.mjs run-server
+  package:
+    cmds:
+      - task: build
+      - node scripts/build.mjs package
+  test:core:
+    cmds: [go test ./internal/... ./cmd/release/...]
+  verify:
+    cmds:
+      - task: generate
+      - npm --prefix frontend run typecheck
+      - npm --prefix frontend run lint
+      - npm --prefix frontend run test
+      - go test ./internal/... ./cmd/release/...
+      - go vet ./...
+      - go vet -tags server ./...
+      - python {{.DOC_CHECK}} .
+      - task: build:server
+      - npm --prefix frontend run test:e2e

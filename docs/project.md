@@ -1,0 +1,90 @@
+# token-monitor-turzx のプロジェクト定義
+
+プロジェクト共通の要件・制約、ユースケース一覧、確認した事実、および実行・検証手順の正本です。全体構造は [アーキテクチャ](architecture.md) を参照します。
+
+## 1. 目的と範囲
+
+| 項目 | 内容 |
+| --- | --- |
+| 解決する問題・達成したい結果 | Token Monitor Hub に集約された AI ツールのトークン利用量・推定コストと利用枠の残量を、ブラウザーやアプリの画面を開かずに、PC に接続した TURZX の USB ディスプレイで常時確認できるようにする |
+| 利用者・利用場面 | Hub を利用する本人が、自分の Windows PC に TURZX 9.2インチを接続し、作業中に横目で利用状況を確認する |
+| 今回の対象 | 1つの Hub からのリアルタイム受信。TURZX への表示（Tokens の Today・Month・All のトークン数と推定コスト、Usage Limits）。サインイン時の自動起動とタスクトレイ常駐。接続中の TURZX 9.2インチから表示先を1台選ぶ設定（選んでいない場合は最初の1台）。プレビューと Hub の接続設定を1画面にまとめたウィンドウ。インストーラーによる導入。GitHub Releases を使った新版の確認と自動更新 |
+| 今回の対象外 | 複数 Hub の同時受信と合算。利用状況の保存と履歴。Hub への書き込み。端末別・モデル別などの内訳表示。TURZX 9.2インチ以外の機種と、複数台への同時表示。動画（H.264）の送信。WinUSB ドライバーの導入。Windows 以外の OS。インストーラーのコード署名（Authenticode） |
+
+## 2. 制約・品質要求・受け入れ条件
+
+- **動作環境**: Windows 11（x64）と WebView2 Runtime が必要です。表示先は TURZX 9.2インチ（USB `1CBE:0092`）で、WinUSB ドライバーが設定済みであることを前提にします。表示中はメーカーのソフトを終了しておきます。
+- **受信**: Hub は1つだけです。`GET /api/stats/stream` に SSE で接続し、Bearer 認証と `x-token-monitor-stream: 2` を付けます。受信が止まったときは、待ち時間を1秒から倍にしながら（上限60秒）再接続を続けます。
+- **保存しないもの**: 受信した利用状況はメモリにだけ持ち、ファイルや DB には保存しません。起動後に最初の snapshot を受信するまでは、利用状況の値を表示しません。
+- **保存するもの**: Hub の接続先 URL と認証トークンは1組にまとめ、Windows の DPAPI でユーザー単位に暗号化して、ユーザーごとの設定領域に保存します。認証トークンはログにも画面表示にも出しません。
+- **Usage Limits の表示**: Hub が報告した枠のうち、メーターを表示する指定（`showMeter`）が付いたものを、Hub が送った順に、表示領域に収まる件数だけ表示します。
+- **障害の独立**: 受信の失敗と USB の切断・抜き差しは、互いにもう一方を止めません。アプリ自体も終了しません。USB ディスプレイがつながったら、その時点の最新表示を送ります。
+- **表示の同一性**: USB ディスプレイとウィンドウのプレビューには同じ内容を表示します。
+- **配布と更新**: インストーラーは NSIS で作り、Windows へのサインイン時の自動起動を登録します。公開する GitHub Releases に、インストーラーと、自作の Ed25519 鍵で署名した更新情報（`update.json`）を置きます。アプリは起動のたびに、起動処理とは別にバックグラウンドで新版を確認し、見つかった新版の取得と、更新情報の署名・インストーラーのハッシュの検証までを自動で行います。適用（インストールと再起動）は、利用者がタスクトレイまたはウィンドウから実行したときだけ行います。署名用の秘密鍵はリポジトリの外で保管します。インストーラーにはコード署名をしないため、初回のインストールでは SmartScreen の警告が出ます。
+- **完了の条件**: 受け入れ条件は各シナリオに書きます。`node scripts/run.mjs verify` の合格を完了の条件とします。USB 実機への表示は、自動テストとは別に実機で確認します。
+
+<a id="usecases"></a>
+## 3. ユースケース一覧
+
+ユースケースの共通事項は `usecases/<名称>/README.md`、シナリオと固有の受け入れ条件は同じディレクトリの `scenarios/<名称>.md` に記載します。案の検討・保存は [提示と保存の手順](standards/mock-driven-development.md#discussion) に従います（未着手のユースケースは下表に名称だけを置き、本文とリンクは作りません）。
+
+ユースケースの単位・系列の分割・モック適用は [モック標準のユースケース分割](standards/mock-driven-development.md#discussion) に従います。
+
+| ユースケース | 主アクター | 目的 | 実装順序 | 実現パターン | モック適用 |
+| --- | --- | --- | --- | --- | --- |
+| [Hubの接続設定を登録・変更する](usecases/Hubの接続設定を登録・変更する/README.md) | 利用者 | 受信する Hub の接続先 URL と認証トークンと、表示先の TURZX を設定する | 1 | [UCP-2](design/UCP-2.md) | 対象 |
+| 利用状況をUSBディスプレイに表示する | 利用者 | Hub の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | 未定 | 対象 |
+| 新版を確認してアプリを更新する | 利用者 | 起動時にバックグラウンドで GitHub Releases の新版を検出し、利用者の確認後にアプリを更新する | 3 | 未定 | 対象 |
+
+常駐（タスクトレイ、ウィンドウの表示・非表示、終了）は独立したユースケースにせず、「利用状況をUSBディスプレイに表示する」の操作の一部として扱います。
+
+<a id="design"></a>
+## 4. 確認した事実
+
+### Token Monitor Hub
+
+- 仕様の情報源は [Javis603/token-monitor](https://github.com/Javis603/token-monitor) の `docs/API.md` です。`cdab5686d2711efea2c961f26d1e2e8c3c211b40`（v0.63.0 以降、2026-09-27 に確認）を対象とし、`GET /api/stats/stream` の節は `8b6cee22eabb7bf7ce0226655b46907300e14a04` から変わっていません。
+- 認証は `Authorization: Bearer <secret>` ヘッダーで行います。
+- `GET /api/stats/stream` は SSE です。接続ごとに最初に全体状態の `snapshot` を送り、30秒ごとに `: hb` のコメント行を送ります。利用量・利用枠・期間の区切りなどが変わると全体状態の `stats` を送ります。要求ヘッダー `x-token-monitor-stream: 2` を付けた場合、時刻だけの変化は `limits.updatedAt` と端末ごとの時刻・鮮度切れだけを含む `freshness` で送ります。通知本文は `type`・`reason`・`stats`・`at` を持つ JSON です。
+- 全体状態の `stats.periods.today`・`month`・`allTime` は Hub 全体の集計値で、`totalTokens`（整数）と `costUsd`（数値）を持ちます。Hub は期間が終わった端末の `today`・`month` を自身の集計から除き、期間の区切りが変わると `stats` を送ります。
+- 利用枠は `stats.limits.providers[]` にアカウントごとに並び、各要素が `provider`・`accountLabel`・`planLabel` と `windows[]` を持ちます。`windows[]` の各要素は `kind`（`session`・`daily`・`weekly`・`billing`）、`showMeter`、`remainingPercent`、`usedPercent`、`resetsAt`、`label` を持ちます。`showMeter` が偽の枠は残量の割合を表示に使いません。
+- 2026-09-27 に利用者の Hub へ接続し、最初の `snapshot` のキー名と型だけを確認しました（値は記録していません）。`periods` の3期間すべてに `totalTokens` と `costUsd` があり、`limits.providers` は21件、そのうち `showMeter` が真の枠を持つのは6件で、枠は合計14件でした。
+
+### TURZX 9.2インチ
+
+- 情報源は [nuitsjp/Turzx.Net](https://github.com/nuitsjp/Turzx.Net) の `7f164ba89a229db900171bc02f608c47bdbeed5e` のソースと `docs/technical-notes.md`（2026-09-27 に実機で検証済み）です。
+- USB `1CBE:0092` の WinUSB デバイスです。bulk IN/OUT の各1本で通信し、読み書きのタイムアウトは2秒です。
+- 1回の送信は、504バイトのヘッダーを DES-CBC（鍵と IV は `slv3tuzx`、パディングなし）で暗号化し、末尾2バイトを `A1 1A` とした512バイトの制御部に、画像のバイト列を続けたものです。ヘッダーは、先頭にコマンド、2・3バイト目に `1A 6D`、4〜7バイト目にタイムスタンプ（ミリ秒、リトルエンディアン）、8〜11バイト目に画像の長さ（ビッグエンディアン）を置きます。コマンドは同期が10、JPEG が101、PNG が102です。応答の先頭がコマンドと `C8` で、2〜5バイト目が送ったタイムスタンプと一致すれば成功です。
+- 画像は 1920×462 で描き、時計回りに90度回転した 462×1920 の Baseline JPEG または PNG を1MiB以下で送ります。JPEG 品質85で毎回描画・圧縮しても約58fps、CPU 負荷は PC 全体の約0.9% でした。静止画像は送信を止めても表示が残ります。
+- 抜き差しは `CM_Register_Notification` で通知を受け、`CM_Get_Device_Interface_ListW` で再列挙して検出できます。対象の列挙には、Turzx.Net の開発 PC の WinUSB ドライバーが公開するインターフェース GUID `dee824ef-729b-4a0e-9c14-b7117d33a817` を使います。このインターフェース GUID はドライバーの導入時に決まる値で、ほかの PC で同じになるかは確認していません。
+- 2026-09-27 にこの PC で、すべての USB デバイスが公開する標準のインターフェース GUID `a5dcbf10-6530-11d2-901f-00c04fb951ed`（`GUID_DEVINTERFACE_USB_DEVICE`）から `vid_1cbe&pid_0092` のパスを列挙し、WinUSB で開いて同期コマンドの正常応答を得ました。上記のドライバー固有の GUID で開いた場合も同じ結果でした。
+
+### Wails とフォント
+
+- `go.mod` の `github.com/wailsapp/wails/v3 v3.0.0-beta.23` は、Windows のタスクトレイ（`SystemTray` のアイコン、メニュー、クリック、ウィンドウの関連付け）と多重起動の防止（`SingleInstanceOptions`）を提供します（2026-09-27 にモジュールのソースで確認）。
+- この PC の Windows 11 には、日本語と英数字の両方を含む游ゴシック（Windows のフォントフォルダーの `YuGothM.ttc`、`YuGothB.ttc`）があります（2026-09-27 に確認）。
+
+<a id="commands"></a>
+## 5. 実行・切り替え・検証手順
+
+作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
+
+mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
+
+| 目的 | コマンド | 期待結果 |
+| --- | --- | --- |
+| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
+| 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているサービスはありません |
+| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
+| 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
+| TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
+| 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
+
+モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
+
+接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
+
+E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-tags server` のビルド）を操作します。検証用サーバーにはタスクトレイがないため、ページを開くことでトレイからウィンドウを開く操作に、プロセスの停止と起動で `Exit` と再起動に代えます。表示先の選択と `(Disconnected)` の保持は機器の接続状態に依存するため、機器の一覧を差し替えられる Go の単体テスト（`internal/settings`）で検証し、タスクトレイの操作は実機で確認します。
+
+開発時に Playwright CLI からウィンドウを操作する場合は、環境変数 `WAILS_WEBVIEW_DEBUG_PORT` にポート番号を指定して起動し、`playwright-cli attach --cdp=http://127.0.0.1:<ポート番号>` で接続します。この環境変数は本番ビルドでは無視します。ウィンドウは表示するまで WebView2 を作らないため、先にウィンドウを開いてから接続します。

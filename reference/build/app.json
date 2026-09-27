@@ -1,0 +1,8 @@
+{
+  "id": "io.github.nuitsjp.wails-template",
+  "name": "Wails Template",
+  "executable": "wails-template.exe",
+  "version": "0.1.0",
+  "updateSource": "",
+  "updatePublicKey": ""
+}

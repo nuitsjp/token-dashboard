@@ -1,0 +1,42 @@
+# Node.jsは.nvmrcと同じ版を指定する。Go・Pythonは以下の検証用ツール版を使用する。
+[tools]
+go = "1.26.5"
+node = "24.21.0"
+python = "3.14"
+
+# 各タスクは scripts/run.mjs の同名コマンドを呼ぶ。
+[tasks.setup]
+description = "Wails CLI・依存・バインディングを導入する"
+run = "node scripts/run.mjs setup"
+
+[tasks.dev]
+description = "アプリを開発起動する"
+run = "node scripts/run.mjs dev"
+
+[tasks."dev:mock"]
+description = "確認用モックを有効にして開発起動する"
+run = "node scripts/run.mjs dev:mock"
+
+[tasks.build]
+description = "本番実行ファイルを bin/ に作る"
+run = "node scripts/run.mjs build"
+
+[tasks.package]
+description = "NSIS インストーラーを bin/ に作る"
+run = "node scripts/run.mjs package"
+
+[tasks.server]
+description = "ブラウザー確認用の検証用サーバーを起動する"
+run = "node scripts/run.mjs server"
+
+[tasks.verify]
+description = "生成・型検査・Lint・テスト・文書検査・E2E を一括実行する"
+run = "node scripts/run.mjs verify"
+
+[tasks."test:core"]
+description = "Go のテストを実行する"
+run = "node scripts/run.mjs test:core"
+
+[tasks.release]
+description = "更新用の鍵と更新情報を作る（引数は scripts/run.mjs release へ渡す）"
+run = "node scripts/run.mjs release"

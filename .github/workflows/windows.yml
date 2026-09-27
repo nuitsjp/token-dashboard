@@ -1,0 +1,48 @@
+name: Windows checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [., reference]
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.directory }}/go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ matrix.directory }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Dependencies and generated sources
+        run: node scripts/run.mjs setup
+      - name: Browser
+        working-directory: ${{ matrix.directory }}/frontend
+        run: npx playwright install --only-shell chromium
+      - name: Verify
+        run: node scripts/run.mjs verify
+      - name: Windows executable
+        run: node scripts/run.mjs build
+      - name: NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Installer
+        run: node scripts/run.mjs package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-${{ matrix.directory == '.' && 'project' || 'reference' }}
+          path: ${{ matrix.directory }}/bin/*-setup.exe
