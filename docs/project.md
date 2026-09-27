@@ -33,7 +33,7 @@
 | ユースケース | 主アクター | 目的 | 実装順序 | 実現パターン | モック適用 |
 | --- | --- | --- | --- | --- | --- |
 | [Hubの接続設定を登録・変更する](usecases/Hubの接続設定を登録・変更する/README.md) | 利用者 | 受信する Hub の接続先 URL と認証トークンと、表示先の TURZX を設定する | 1 | [UCP-2](design/UCP-2.md) | 対象 |
-| 利用状況をUSBディスプレイに表示する | 利用者 | Hub の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | 未定 | 対象 |
+| [利用状況をUSBディスプレイに表示する](usecases/利用状況をUSBディスプレイに表示する/README.md) | 利用者 | Hub の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | [UCP-1](design/UCP-1.md) | 対象 |
 | 新版を確認してアプリを更新する | 利用者 | 起動時にバックグラウンドで GitHub Releases の新版を検出し、利用者の確認後にアプリを更新する | 3 | 未定 | 対象 |
 
 常駐（タスクトレイ、ウィンドウの表示・非表示、終了）は独立したユースケースにせず、「利用状況をUSBディスプレイに表示する」の操作の一部として扱います。
@@ -57,6 +57,7 @@
 - 1回の送信は、504バイトのヘッダーを DES-CBC（鍵と IV は `slv3tuzx`、パディングなし）で暗号化し、末尾2バイトを `A1 1A` とした512バイトの制御部に、画像のバイト列を続けたものです。ヘッダーは、先頭にコマンド、2・3バイト目に `1A 6D`、4〜7バイト目にタイムスタンプ（ミリ秒、リトルエンディアン）、8〜11バイト目に画像の長さ（ビッグエンディアン）を置きます。コマンドは同期が10、JPEG が101、PNG が102です。応答の先頭がコマンドと `C8` で、2〜5バイト目が送ったタイムスタンプと一致すれば成功です。
 - 画像は 1920×462 で描き、時計回りに90度回転した 462×1920 の Baseline JPEG または PNG を1MiB以下で送ります。JPEG 品質85で毎回描画・圧縮しても約58fps、CPU 負荷は PC 全体の約0.9% でした。静止画像は送信を止めても表示が残ります。
 - 抜き差しは `CM_Register_Notification` で通知を受け、`CM_Get_Device_Interface_ListW` で再列挙して検出できます。対象の列挙には、Turzx.Net の開発 PC の WinUSB ドライバーが公開するインターフェース GUID `dee824ef-729b-4a0e-9c14-b7117d33a817` を使います。このインターフェース GUID はドライバーの導入時に決まる値で、ほかの PC で同じになるかは確認していません。
+- 2026-09-27 に、[turing-smart-screen-python](https://github.com/mathoudebine/turing-smart-screen-python) の `library/lcd/lcd_comm_turing_usb.py` にある再起動コマンド（11）を送ったところ、約3秒後に機器がいったん列挙から消え、約1.5秒後に再び列挙されました。再起動後の画面の表示は目視で確認していません。
 - 2026-09-27 にこの PC で、すべての USB デバイスが公開する標準のインターフェース GUID `a5dcbf10-6530-11d2-901f-00c04fb951ed`（`GUID_DEVINTERFACE_USB_DEVICE`）から `vid_1cbe&pid_0092` のパスを列挙し、WinUSB で開いて同期コマンドの正常応答を得ました。上記のドライバー固有の GUID で開いた場合も同じ結果でした。
 
 ### Wails とフォント
@@ -75,7 +76,7 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているサービスはありません |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているものはありません |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
