@@ -20,6 +20,7 @@ import (
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/settings"
+	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
 )
 
@@ -95,7 +96,7 @@ func run() error {
 		}
 	}
 	controls := &desktop.Controls{Emit: emit}
-	settingsService := settings.New()
+	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
 	updateService := updates.New(updates.Config{

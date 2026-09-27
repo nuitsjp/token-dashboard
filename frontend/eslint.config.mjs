@@ -11,7 +11,7 @@ export default tseslint.config(
     } },
   { files: ['src/usecases/**/*.{ts,tsx}', 'src/shared/**/*.{ts,tsx}'], rules: {
     'no-restricted-imports': ['error', { patterns: [
-      { group: ['@bindings/**/service', '@bindings/**/service.ts', '@settings-service'], message: 'Use the feature access functions. Generated model types are allowed.' },
+      { group: ['@bindings/**/service', '@bindings/**/service.ts'], message: 'Use the feature access functions. Generated model types are allowed.' },
     ] }],
   } },
   { files: ['src/features/**/*.{ts,tsx}'], rules: {

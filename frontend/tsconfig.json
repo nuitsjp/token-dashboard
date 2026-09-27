@@ -6,8 +6,7 @@
     "resolveJsonModule": true, "isolatedModules": true,
     "types": ["vite/client", "vitest/globals"],
     "baseUrl": ".", "paths": {
-      "@bindings/*": ["bindings/*"],
-      "@settings-service": ["bindings/token-monitor-turzx/internal/settings/service.ts"]
+      "@bindings/*": ["bindings/*"]
     }
   },
   "include": ["src", "bindings", "tests", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]

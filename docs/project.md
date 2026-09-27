@@ -73,11 +73,13 @@
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 設定サービスだけを `frontend/tests/fixtures/settings.ts` の固定データへ差し替えて起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているサービスはありません |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | アプリが終了します。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
 
-モックの差し替えは `frontend/vite.config.ts` の `@settings-service` の1か所だけで行い、`WAILS_FRONTEND_MODE=mock` のときだけ有効です。本番ビルドでこの値が指定されているとビルドを中止します。設定サービスの呼び出しに失敗しても、固定データへは切り替えません。
+モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
+
+接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
 
 開発時に Playwright CLI からウィンドウを操作する場合は、環境変数 `WAILS_WEBVIEW_DEBUG_PORT` にポート番号を指定して起動し、`playwright-cli attach --cdp=http://127.0.0.1:<ポート番号>` で接続します。この環境変数は本番ビルドでは無視します。ウィンドウは表示するまで WebView2 を作らないため、先にウィンドウを開いてから接続します。
