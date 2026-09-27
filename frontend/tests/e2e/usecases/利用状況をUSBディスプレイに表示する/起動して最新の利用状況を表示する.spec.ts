@@ -164,9 +164,10 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
       // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.
       hub.send('stats', ranked());
-      await expect.poll(async () => (await colours(page, await preview(page))).firstColumnTop).toEqual(red);
+      // The earlier image already shows red at the top of the first column, so wait for the yellow.
+      await expect.poll(async () => (await colours(page, await preview(page))).firstColumnSecond).toEqual(yellow);
       const ordered = await colours(page, await preview(page));
-      expect(ordered.firstColumnSecond).toEqual(yellow);
+      expect(ordered.firstColumnTop).toEqual(red);
       expect(ordered.secondColumnTop).toEqual(green);
       expect(ordered.fourthColumnTop).toEqual(green);
     });
