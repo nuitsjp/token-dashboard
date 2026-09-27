@@ -60,6 +60,8 @@ type Service struct {
 	entropy []byte
 	list    func() ([]turzx.Device, error)
 	logger  *slog.Logger
+	// OnSaved hands the new settings to the processes that depend on them. It must not block.
+	OnSaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -134,6 +136,9 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		return View{}, err
 	}
 	s.logger.Info("settings_saved")
+	if s.OnSaved != nil {
+		s.OnSaved()
+	}
 	return viewOf(next, conn, devices), nil
 }
 
@@ -232,4 +237,13 @@ func DisplayTarget(s *Service) (string, error) {
 		return "", err
 	}
 	return devices[0].ID, nil
+}
+
+// Connection returns the saved Hub URL and token for the receiver. It is a function, not a
+// method, so Wails does not bind it and the token never reaches the window.
+func Connection(s *Service) (string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, conn, err := s.read()
+	return conn.URL, conn.Token, err
 }

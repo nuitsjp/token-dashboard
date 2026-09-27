@@ -22,6 +22,7 @@ import (
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/display"
 	"token-monitor-turzx/internal/fault"
+	"token-monitor-turzx/internal/hub"
 	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
@@ -153,9 +154,9 @@ func run() error {
 		sink = output.Submit
 	}
 	go display.Run(ctx, displayService, renderer, usageState, sink, emit, logger)
-	if !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock" {
-		go mockHub(ctx, usageState)
-	}
+	receiver := hub.New(func() (string, string, error) { return settings.Connection(settingsService) }, usageState, logger)
+	settingsService.OnSaved = receiver.Restart
+	go receiver.Run(ctx)
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
 		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})

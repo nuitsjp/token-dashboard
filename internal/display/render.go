@@ -87,20 +87,35 @@ func (r *Renderer) Render(stats *usage.Stats, now time.Time) *image.RGBA {
 	return img
 }
 
-// tokens draws Today, Month and All in one row: label, tokens and cost side by side.
+// tokens draws Today, Month and All in one row, each as label, tokens and cost side by side.
+// The three blocks sit at the left, centre and right; large numbers shrink until they fit.
 func (r *Renderer) tokens(img *image.RGBA, periods usage.Periods) {
-	label, value, cost := r.face(false, 28), r.face(true, 48), r.face(false, 36)
-	for i, p := range []struct {
-		label  string
-		period usage.Period
-	}{{"Today", periods.Today}, {"Month", periods.Month}, {"All", periods.AllTime}} {
-		x := 40 + i*620
-		r.text(img, label, dim, x, 84, p.label)
-		x += measure(label, p.label) + 20
-		tokens := commas(fmt.Sprint(p.period.TotalTokens))
-		r.text(img, value, text, x, 84, tokens)
-		x += measure(value, tokens) + 20
-		r.text(img, cost, accent, x, 84, usd(p.period.CostUSD))
+	blocks := []struct{ label, tokens, cost string }{
+		{"Today", commas(fmt.Sprint(periods.Today.TotalTokens)), usd(periods.Today.CostUSD)},
+		{"Month", commas(fmt.Sprint(periods.Month.TotalTokens)), usd(periods.Month.CostUSD)},
+		{"All", commas(fmt.Sprint(periods.AllTime.TotalTokens)), usd(periods.AllTime.CostUSD)},
+	}
+	var label, value, cost font.Face
+	widths := make([]int, len(blocks))
+	for size := 48.0; ; size -= 2 {
+		label, value, cost = r.face(false, size*28/48), r.face(true, size), r.face(false, size*36/48)
+		total := 0
+		for i, b := range blocks {
+			widths[i] = measure(label, b.label) + 16 + measure(value, b.tokens) + 16 + measure(cost, b.cost)
+			total += widths[i]
+		}
+		if total+2*48 <= Width-80 || size <= 28 {
+			break
+		}
+	}
+	lefts := []int{40, (Width - widths[1]) / 2, Width - 40 - widths[2]}
+	for i, b := range blocks {
+		x := lefts[i]
+		r.text(img, label, dim, x, 84, b.label)
+		x += measure(label, b.label) + 16
+		r.text(img, value, text, x, 84, b.tokens)
+		x += measure(value, b.tokens) + 16
+		r.text(img, cost, accent, x, 84, b.cost)
 	}
 }
 
@@ -155,7 +170,7 @@ func layout(gs []group) [][]group {
 			continue
 		}
 		if len(out) == columns {
-			break
+			continue // a later single-window group may still fit under the others
 		}
 		if len(g.windows) == 1 {
 			singles, used = len(out), g.height()
@@ -199,7 +214,11 @@ func (r *Renderer) bars(img *image.RGBA, g group, x, y int, now time.Time) {
 		}
 		rw := measure(small, reset)
 		r.text(img, small, dim, resetRight-rw, top+22, reset)
-		r.text(img, small, text, x, top+22, truncate(small, w.Label, resetRight-rw-12-x))
+		label := w.Label
+		if label == "" {
+			label = w.Kind
+		}
+		r.text(img, small, text, x, top+22, truncate(small, label, resetRight-rw-12-x))
 		fill(img, image.Rect(x, top+32, x+columnWidth, top+42), track)
 		if w.RemainingPercent != nil {
 			v := min(max(*w.RemainingPercent, 0), 100)
