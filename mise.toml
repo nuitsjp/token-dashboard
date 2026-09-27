@@ -41,6 +41,10 @@ run = "node scripts/run.mjs test:core"
 description = "デスクトップ版をインストールして更新する E2E を実行する（手元で実行）"
 run = "node scripts/run.mjs test:desktop"
 
+[tasks."release:tag"]
+description = "リリースタグを push し、CI にリリースさせる（版を省略すると最新の版の patch を1つ上げる）"
+run = "node scripts/run.mjs tag"
+
 [tasks.release]
 description = "更新用の鍵と更新情報を作る（引数は scripts/run.mjs release へ渡す）"
 run = "node scripts/run.mjs release"

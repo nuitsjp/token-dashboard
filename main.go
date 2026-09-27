@@ -35,8 +35,9 @@ var webAssets embed.FS
 //go:embed build/app.json
 var configJSON []byte
 
-// Set only by the desktop E2E build through -ldflags -X (see scripts/build.mjs).
-// Release builds leave them empty and use build/app.json as is.
+// Fixed at build time through -ldflags -X (see scripts/build.mjs): the release CI sets
+// the version from the tag, and the desktop E2E also sets a local update source.
+// An empty value keeps the one in build/app.json.
 var buildVersion, buildUpdateSource, buildUpdatePublicKey string
 
 type appConfig struct {
@@ -60,8 +61,10 @@ func run() error {
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return err
 	}
-	if buildVersion != "" {
-		cfg.Version, cfg.UpdateSource, cfg.UpdatePublicKey = buildVersion, buildUpdateSource, buildUpdatePublicKey
+	for target, value := range map[*string]string{&cfg.Version: buildVersion, &cfg.UpdateSource: buildUpdateSource, &cfg.UpdatePublicKey: buildUpdatePublicKey} {
+		if value != "" {
+			*target = value
+		}
 	}
 	if cfg.ID == "" || cfg.Name == "" {
 		return fmt.Errorf("build/app.json: id and name are required")

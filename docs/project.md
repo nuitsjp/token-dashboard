@@ -20,7 +20,7 @@
 - **Usage Limits の表示**: Hub が報告した枠のうち、メーターを表示する指定（`showMeter`）が付いたものを、Hub が送った順に、表示領域に収まる件数だけ表示します。
 - **障害の独立**: 受信の失敗と USB の切断・抜き差しは、互いにもう一方を止めません。アプリ自体も終了しません。USB ディスプレイがつながったら、その時点の最新表示を送ります。
 - **表示の同一性**: USB ディスプレイとウィンドウのプレビューには同じ内容を表示します。
-- **配布と更新**: インストーラーは NSIS で作り、Windows へのサインイン時の自動起動を登録します。公開する GitHub Releases に、インストーラーと、自作の Ed25519 鍵で署名した更新情報（`update.json`）を置きます。アプリは起動のたびに、起動処理とは別にバックグラウンドで新版を確認し、見つかった新版の取得と、更新情報の署名・インストーラーのハッシュの検証までを自動で行います。適用（インストールと再起動）は、利用者がタスクトレイまたはウィンドウから実行したときだけ行います。署名用の秘密鍵はリポジトリの外で保管します。インストーラーにはコード署名をしないため、初回のインストールでは SmartScreen の警告が出ます。
+- **配布と更新**: インストーラーは NSIS で作り、Windows へのサインイン時の自動起動を登録します。公開する GitHub Releases に、インストーラーと、自作の Ed25519 鍵で署名した更新情報（`update.json`）を置きます。アプリは起動のたびに、起動処理とは別にバックグラウンドで新版を確認し、見つかった新版の取得と、更新情報の署名・インストーラーのハッシュの検証までを自動で行います。適用（インストールと再起動）は、利用者がタスクトレイまたはウィンドウから実行したときだけ行います。リリースはタグの push で CI（`.github/workflows/release.yml`）が作成します。署名用の秘密鍵はリポジトリの外で保管し、CI 用に GitHub の Secrets（`UPDATE_SIGNING_KEY`）に登録します。インストーラーにはコード署名をしないため、初回のインストールでは SmartScreen の警告が出ます。
 - **完了の条件**: 受け入れ条件は各シナリオに書きます。`node scripts/run.mjs verify` の合格を完了の条件とします。USB 実機への表示は、自動テストとは別に実機で確認します。
 
 <a id="usecases"></a>
@@ -82,10 +82,10 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
 | 更新の E2E | `node scripts/run.mjs test:desktop` | 「起動時に取得した新版で更新して再起動する」の E2E が合格します。v0.1.0 と v0.2.0 のインストーラーを作り、実際にインストールして更新し、最後にアンインストールします。動いている Token Monitor TURZX をすべて止め、インストールしていない状態で、手元で実行します。`verify` には含めません |
-| インストーラーの作成 | `node scripts/run.mjs package` | `bin\token-monitor-turzx-<版>-amd64-setup.exe` ができます。版は `build/app.json` の `version` です |
-| 更新情報の作成 | `node scripts/run.mjs release manifest -key $env:USERPROFILE\.token-monitor-turzx\release-signing.key -installer bin\token-monitor-turzx-<版>-amd64-setup.exe -app-id io.github.nuitsjp.token-monitor-turzx -version <版> -out bin` | `bin\update.json` ができます。インストーラーと `update.json` を GitHub Releases の最新リリースに置くと、各 PC のアプリが次の起動時に新版として取得します |
+| インストーラーの作成 | `node scripts/run.mjs package` | `bin\token-monitor-turzx-<版>-amd64-setup.exe` ができます。版は `build/app.json` の `version` です。リリースの版はタグで決まるため、`build/app.json` の `version` は上げません |
+| リリース | `mise run release:tag`（版を指定するときは `mise run release:tag 1.2.0`） | 最新のタグ（タグがなければ `build/app.json` の `version`）の patch を1つ上げた `v<版>` のタグを、指定したときはその版のタグを push します。コミットしていない変更がない状態で、`origin/main` に含まれるコミットで実行します。push したタグで CI が検証、インストーラーの作成、`update.json` の署名、GitHub Releases の最新リリースへの公開を行い、各 PC のアプリが次の起動時に新版として取得します |
 
-デスクトップ版のビルドとインストーラーの作成では、環境変数 `BUILD_APP_VERSION` を指定すると、版番号を `build/app.json` の代わりにその値にし、更新元と公開鍵も `BUILD_UPDATE_SOURCE`・`BUILD_UPDATE_PUBLIC_KEY` の値（未指定なら空）にします。値はビルド時に実行ファイルへ埋め込み、実行時の環境変数では変わりません。更新の E2E が、手元の更新元を使う版を作るためのもので、配布するビルドでは指定しません。
+デスクトップ版のビルドとインストーラーの作成では、環境変数 `BUILD_APP_VERSION`・`BUILD_UPDATE_SOURCE`・`BUILD_UPDATE_PUBLIC_KEY` を指定すると、版番号・更新元・公開鍵を、`build/app.json` の代わりにその値にします（指定しない項目は `build/app.json` の値のまま）。値はビルド時に実行ファイルへ埋め込み、実行時の環境変数では変わりません。リリースの CI は `BUILD_APP_VERSION` だけをタグの版にし、更新の E2E は3つとも指定して、手元の更新元を使う版を作ります。
 
 モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
 
