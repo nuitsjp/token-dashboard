@@ -29,8 +29,17 @@ func TestFormats(t *testing.T) {
 	}
 }
 
-func contract(name string, meters int) group {
-	return group{name: name, windows: make([]usage.Window, meters)}
+// contract makes a group whose windows report the given remaining percents; a negative one reports none.
+func contract(name string, remaining ...float64) group {
+	g := group{name: name}
+	for _, v := range remaining {
+		w := usage.Window{ShowMeter: true}
+		if v >= 0 {
+			w.RemainingPercent = &v
+		}
+		g.windows = append(g.windows, w)
+	}
+	return g
 }
 
 func names(columns [][]group) [][]string {
@@ -45,13 +54,15 @@ func names(columns [][]group) [][]string {
 	return out
 }
 
-func TestLayoutStacksSingleWindowContracts(t *testing.T) {
+func TestLayoutPacksByLowestRemaining(t *testing.T) {
 	got := names(layout([]group{
-		contract("antigravity", 4), contract("claude", 2), contract("codex", 1), contract("cursor", 3),
-		contract("grok", 1), contract("opencode", 3), contract("kimi", 1), contract("zai", 2),
+		contract("antigravity", 100, 99, 100, 100), contract("claude", 48, 82), contract("codex", 87),
+		contract("cursor", 95, 71, 100), contract("unknown", -1), contract("opencode", 100, 97, 89),
+		contract("copilot", 42), contract("grok", 87),
 	}))
-	// codex and grok share a column, kimi does not fit under them, and zai finds no column left.
-	want := [][]string{{"antigravity"}, {"claude"}, {"codex", "grok"}, {"cursor"}, {"opencode"}}
+	// codex and grok tie at 87% and keep Hub order. Each column holds at most two contracts and
+	// four windows, so antigravity opens the last column and unknown, reporting nothing, finds no room.
+	want := [][]string{{"copilot", "claude"}, {"cursor", "codex"}, {"grok", "opencode"}, {"antigravity"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
