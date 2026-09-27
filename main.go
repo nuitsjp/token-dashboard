@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -18,10 +20,12 @@ import (
 	"token-monitor-turzx/internal/appstate"
 	"token-monitor-turzx/internal/desktop"
 	"token-monitor-turzx/internal/diagnostics"
+	"token-monitor-turzx/internal/display"
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
+	"token-monitor-turzx/internal/usage"
 )
 
 //go:embed all:frontend/dist
@@ -103,14 +107,29 @@ func run() error {
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
+	renderer, err := display.NewRenderer()
+	if err != nil {
+		return err
+	}
+	usageState := usage.NewState()
+	displayService := &display.Service{}
+	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
 	options := application.Options{
 		Name: cfg.Name, Description: "Token Monitor Hub の利用状況を TURZX に表示する常駐アプリ", Logger: logger,
 		Assets:       application.AssetOptions{Handler: application.BundledAssetFileServer(root), DisableLogging: true},
-		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService)},
+		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService), application.NewService(displayService)},
 		MarshalError: fault.Marshal,
 		ShouldQuit:   controls.ShouldQuit,
-		Server:       application.ServerOptions{Host: "127.0.0.1", Port: port},
-		Windows:      application.WindowsOptions{WebviewUserDataPath: filepath.Join(dir, "webview")},
+		OnShutdown: func() {
+			stop()
+			if !serverMode {
+				output.Wait()
+			}
+		},
+		Server:  application.ServerOptions{Host: "127.0.0.1", Port: port},
+		Windows: application.WindowsOptions{WebviewUserDataPath: filepath.Join(dir, "webview")},
 	}
 	if port := os.Getenv("WAILS_WEBVIEW_DEBUG_PORT"); port != "" && !production {
 		// Development only: lets Playwright CLI attach to the WebView2 over CDP.
@@ -128,6 +147,15 @@ func run() error {
 		}}
 	}
 	app = application.New(options)
+	sink := func(*image.RGBA) {}
+	if !serverMode {
+		go output.Run(ctx)
+		sink = output.Submit
+	}
+	go display.Run(ctx, displayService, renderer, usageState, sink, emit, logger)
+	if !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock" {
+		go mockHub(ctx, usageState)
+	}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
 		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})

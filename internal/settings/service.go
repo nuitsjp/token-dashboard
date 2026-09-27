@@ -214,3 +214,22 @@ func parseOrigin(value string) (string, bool) {
 	}
 	return u.Scheme + "://" + u.Host, true
 }
+
+// DisplayTarget returns the saved display, or the first connected one when Automatic ("" if none).
+// It is a function, not a method, so Wails does not bind it.
+func DisplayTarget(s *Service) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return "", err
+	}
+	if saved.DisplayID != "" {
+		return saved.DisplayID, nil
+	}
+	devices, err := s.list()
+	if err != nil || len(devices) == 0 {
+		return "", err
+	}
+	return devices[0].ID, nil
+}

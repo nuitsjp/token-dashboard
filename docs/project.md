@@ -75,13 +75,13 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在、固定データへ差し替えているサービスはありません |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません。現在は、Hub の受信の代わりに本体の最新状態へ固定データを入れています（起動の3秒後に snapshot、以後15秒ごとに Today の値を増やした stats） |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
 
-モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
+モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。本体の最新状態の差し替え（`mock.go`）も同じ値のときだけ有効で、本番ビルドでは無効です。サービスの呼び出しに失敗しても、固定データへは切り替えません。
 
 接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
 
