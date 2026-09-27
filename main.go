@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -109,16 +108,8 @@ func run() error {
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
-	launch := updates.LaunchInstaller
-	updateDelay := time.Duration(0)
 	mock := !production && os.Getenv("WAILS_FRONTEND_MODE") == "mock"
-	if mock {
-		if launch, err = mockRelease(dir, &updateConfig, logger); err != nil {
-			return err
-		}
-		updateDelay = mockUpdateDelay
-	}
-	updateService := updates.New(updateConfig, state, logger, emit, launch, controls.ApproveQuit)
+	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	renderer, err := display.NewRenderer()
 	if err != nil {
 		return err
@@ -224,14 +215,7 @@ func run() error {
 		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		go func() {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(updateDelay):
-			}
-			updates.Run(ctx, updateService, updateReady)
-		}()
+		go updates.Run(ctx, updateService, updateReady)
 	})
 	return app.Run()
 }
