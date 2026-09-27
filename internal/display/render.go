@@ -93,7 +93,7 @@ func (r *Renderer) Render(stats *usage.Stats, now time.Time) *image.RGBA {
 const tokensRight = 330
 
 // tokens draws Today, Month and All from top to bottom, each as label and cost on one line
-// with the tokens below. The tokens shrink until they fit the column.
+// with the tokens below, right-aligned with the cost. The tokens shrink until they fit the column.
 func (r *Renderer) tokens(img *image.RGBA, periods usage.Periods) {
 	blocks := []struct {
 		label  string
@@ -110,7 +110,8 @@ func (r *Renderer) tokens(img *image.RGBA, periods usage.Periods) {
 		for size > 20 && measure(r.face(true, size), tokens) > tokensRight-40 {
 			size -= 2
 		}
-		r.text(img, r.face(true, size), text, 40, top+36+int(size), tokens)
+		face := r.face(true, size)
+		r.text(img, face, text, tokensRight-measure(face, tokens), top+36+int(size), tokens)
 	}
 	fill(img, image.Rect(tokensRight+26, 30, tokensRight+28, Height-30), divider)
 }
