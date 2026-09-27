@@ -12,6 +12,7 @@ const background = [15, 17, 23];
 const line = [42, 47, 58]; // the divider and the empty part of a bar
 const green = [74, 222, 128];
 const red = [248, 113, 113];
+const yellow = [251, 191, 36];
 const points = {
   divider: [356, 231], // between Tokens and Usage Limits
   alphaBarStart: [389, 124], // lowest remaining, so the first contract of the first column
@@ -19,6 +20,10 @@ const points = {
   betaBarStart: [389, 268], // the next contract, stacked under the first
   betaBarEnd: [730, 268],
   secondColumn: [800, 124],
+  firstColumnTop: [389, 124], // the first bar of each column's first contract
+  firstColumnSecond: [389, 268], // the first bar of a contract under a one-window contract
+  secondColumnTop: [770, 124],
+  fourthColumnTop: [1532, 124],
 } as const;
 
 const token = 'e2e-hub-token';
@@ -34,6 +39,21 @@ function stats(alphaRemaining: number) {
       ] },
       { provider: 'gamma', accountLabel: 'Balance only', windows: [{ kind: 'billing', label: 'Credits', showMeter: false }] },
       { provider: 'beta', planLabel: 'Max', windows: [{ kind: 'weekly', label: 'Weekly', showMeter: true, remainingPercent: 80, usedPercent: 20, resetsAt: hours(50) }] },
+    ] },
+  };
+}
+
+// Contracts in Hub order whose lowest remaining percents put them in a different order on screen.
+function ranked() {
+  const contract = (provider: string, ...remaining: (number | null)[]) => ({
+    provider, planLabel: 'Pro',
+    windows: remaining.map((r, i) => ({ kind: 'weekly', label: `w${i}`, showMeter: true, remainingPercent: r, usedPercent: r === null ? null : 100 - r, resetsAt: hours(50) })),
+  });
+  return {
+    ...stats(12),
+    limits: { providers: [
+      contract('four', 90, 95, 100, 100), contract('one', 10), contract('three', 30, 60, 90),
+      contract('unknown', null), contract('late', 95, 95, 95, 95), contract('last', 99, 99, 99, 99),
     ] },
   };
 }
@@ -141,6 +161,14 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       const current = await preview(page);
       await expect.poll(() => preview(page), { timeout: 70_000, intervals: [5_000] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
+      // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
+      // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.
+      hub.send('stats', ranked());
+      await expect.poll(async () => (await colours(page, await preview(page))).firstColumnTop).toEqual(red);
+      const ordered = await colours(page, await preview(page));
+      expect(ordered.firstColumnSecond).toEqual(yellow);
+      expect(ordered.secondColumnTop).toEqual(green);
+      expect(ordered.fourthColumnTop).toEqual(green);
     });
   } finally {
     await server.stop();
