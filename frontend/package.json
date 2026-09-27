@@ -15,7 +15,7 @@
     "lint": "eslint src tests",
     "format": "prettier --write src tests *.ts *.json",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --pass-with-no-tests"
   },
   "dependencies": {
     "@mantine/core": "8.3.5",

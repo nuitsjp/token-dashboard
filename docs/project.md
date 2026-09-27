@@ -67,6 +67,17 @@
 <a id="commands"></a>
 ## 5. 実行・切り替え・検証手順
 
-{{RUN_AND_VERIFY_COMMANDS}}
+作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
-環境構築、作業ディレクトリ、実行コマンド、設定、期待結果を明記します。自動テストと実機確認の対象・条件を示し、最新コードで再実行できる手順を維持します。モック利用時は、起動・終了、モック有効/無効の確認、実処理への切り替え手順を記述します（接続失敗時にモックへフォールバックしないことの確認を含む）。
+| 目的 | コマンド | 期待結果 |
+| --- | --- | --- |
+| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
+| 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
+| モックでの起動 | `node scripts/run.mjs dev:mock` | 設定サービスだけを `frontend/tests/fixtures/settings.ts` の固定データへ差し替えて起動します。画面の右上に `Mock data`、本文の先頭に `Fixed test data. Nothing is saved.` が表示されます。`dev` で起動したときは、どちらも表示されません |
+| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | アプリが終了します。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
+| 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
+| 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
+
+モックの差し替えは `frontend/vite.config.ts` の `@settings-service` の1か所だけで行い、`WAILS_FRONTEND_MODE=mock` のときだけ有効です。本番ビルドでこの値が指定されているとビルドを中止します。設定サービスの呼び出しに失敗しても、固定データへは切り替えません。
+
+開発時に Playwright CLI からウィンドウを操作する場合は、環境変数 `WAILS_WEBVIEW_DEBUG_PORT` にポート番号を指定して起動し、`playwright-cli attach --cdp=http://127.0.0.1:<ポート番号>` で接続します。この環境変数は本番ビルドでは無視します。ウィンドウは表示するまで WebView2 を作らないため、先にウィンドウを開いてから接続します。

@@ -1,2 +1,3 @@
-import { createFileRoute, Navigate } from '@tanstack/react-router';
-export const Route = createFileRoute('/')({ component: () => <Navigate to="/notes" /> });
+import { createFileRoute } from '@tanstack/react-router';
+import { ConfigureHub } from '../usecases/configure-hub/ConfigureHub';
+export const Route = createFileRoute('/')({ component: ConfigureHub });

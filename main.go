@@ -19,7 +19,7 @@ import (
 	"token-monitor-turzx/internal/desktop"
 	"token-monitor-turzx/internal/diagnostics"
 	"token-monitor-turzx/internal/fault"
-	"token-monitor-turzx/internal/notes"
+	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/updates"
 )
 
@@ -95,12 +95,7 @@ func run() error {
 		}
 	}
 	controls := &desktop.Controls{Emit: emit}
-	noteService, err := notes.New(dir, logger, state, emit)
-	if err != nil {
-		return err
-	}
-	// Also clean up if application construction or startup fails.
-	defer noteService.ServiceShutdown()
+	settingsService := settings.New()
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
 	updateService := updates.New(updates.Config{
@@ -108,13 +103,17 @@ func run() error {
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	options := application.Options{
-		Name: cfg.Name, Description: "Wails用のユースケース駆動テンプレート", Logger: logger,
+		Name: cfg.Name, Description: "Token Monitor Hub の利用状況を TURZX に表示する常駐アプリ", Logger: logger,
 		Assets:       application.AssetOptions{Handler: application.BundledAssetFileServer(root), DisableLogging: true},
-		Services:     []application.Service{application.NewService(noteService), application.NewService(appService), application.NewService(updateService)},
+		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService)},
 		MarshalError: fault.Marshal,
 		ShouldQuit:   controls.ShouldQuit,
 		Server:       application.ServerOptions{Host: "127.0.0.1", Port: port},
 		Windows:      application.WindowsOptions{WebviewUserDataPath: filepath.Join(dir, "webview")},
+	}
+	if port := os.Getenv("WAILS_WEBVIEW_DEBUG_PORT"); port != "" && !production {
+		// Development only: lets Playwright CLI attach to the WebView2 over CDP.
+		options.Windows.AdditionalBrowserArgs = []string{"--remote-debugging-port=" + port}
 	}
 	if !serverMode {
 		// A deterministic per-product key, not a secret or an updater key.
@@ -129,12 +128,34 @@ func run() error {
 	}
 	app = application.New(options)
 	if !serverMode {
-		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/"})
+		// The app lives in the task tray. Closing the window only hides it.
+		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: cfg.Name, Width: 1160, Height: 800, URL: "/", Hidden: true})
 		window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-			if !controls.ShouldQuit() {
-				e.Cancel()
-			}
+			e.Cancel()
+			window.Hide()
 		})
+		show := func() {
+			window.Show()
+			window.Restore()
+			window.Focus()
+		}
+		menu := application.NewMenu()
+		menu.Add("Open").OnClick(func(*application.Context) { show() })
+		menu.AddSeparator()
+		menu.Add("Exit").OnClick(func(*application.Context) {
+			// Exit from the tray quits without a dialogue unless work is in progress.
+			if err := state.PrepareExit(); err != nil {
+				show()
+				emit(desktop.CloseRequested, nil)
+				return
+			}
+			controls.ApproveQuit()
+			app.Quit()
+		})
+		tray := app.SystemTray.New()
+		tray.SetTooltip(cfg.Name)
+		tray.SetMenu(menu)
+		tray.OnClick(show)
 	}
 	return app.Run()
 }
