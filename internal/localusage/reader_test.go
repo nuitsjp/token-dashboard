@@ -4,28 +4,35 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"token-monitor-turzx/internal/usage"
 )
 
 func TestConvertTokscalePeriods(t *testing.T) {
+	const input = `{"contributions": [
+  {"date": "2026-08-31", "totals": {"cost": 113.25}, "tokenBreakdown": {"input": 9000, "output": 18000, "cacheRead": 27000, "cacheWrite": 36000, "reasoning": 5}},
+  {"date": "2026-09-01", "totals": {"cost": 11.25}, "tokenBreakdown": {"input": 900, "output": 1800, "cacheRead": 2700, "cacheWrite": 3600, "reasoning": 5}},
+  {"date": "2026-09-28", "totals": {"cost": 1.25}, "tokenBreakdown": {"input": 101, "output": 202, "cacheRead": 303, "cacheWrite": 404, "reasoning": 5}}
+]}`
+	var raw graph
+	if err := json.Unmarshal([]byte(input), &raw); err != nil {
+		t.Fatal(err)
+	}
+	got := convertGraph(raw, time.Date(2026, 9, 28, 12, 0, 0, 0, time.Local))
 	cases := []struct {
-		name  string
-		input string
-		want  int64
-		cost  float64
+		name string
+		got  usage.Period
+		want int64
+		cost float64
 	}{
-		{name: "today", input: `{"totalInput":101,"totalOutput":202,"totalCacheRead":303,"totalCacheWrite":404,"totalCost":1.25}`, want: 1010, cost: 1.25},
-		{name: "month", input: `{"totalInput":1001,"totalOutput":2002,"totalCacheRead":3003,"totalCacheWrite":4004,"totalCost":12.5}`, want: 10010, cost: 12.5},
-		{name: "all", input: `{"totalInput":10001,"totalOutput":20002,"totalCacheRead":30003,"totalCacheWrite":40004,"totalCost":125.75}`, want: 100010, cost: 125.75},
+		{name: "today", got: got.Today, want: 1010, cost: 1.25},
+		{name: "month", got: got.Month, want: 10010, cost: 12.5},
+		{name: "all", got: got.AllTime, want: 100010, cost: 125.75},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var raw period
-			if err := json.Unmarshal([]byte(tc.input), &raw); err != nil {
-				t.Fatal(err)
-			}
-			got := convertPeriod(raw)
-			if got.TotalTokens != tc.want || got.CostUSD != tc.cost {
-				t.Fatalf("period = %+v, want tokens %d and cost %v", got, tc.want, tc.cost)
+			if tc.got.TotalTokens != tc.want || tc.got.CostUSD != tc.cost {
+				t.Fatalf("period = %+v, want tokens %d and cost %v", tc.got, tc.want, tc.cost)
 			}
 		})
 	}

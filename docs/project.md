@@ -53,7 +53,8 @@
 
 ### tokscale
 
-- 情報源は [junhoyeo/tokscale v4.17.0](https://github.com/junhoyeo/tokscale/tree/v4.17.0) です。Windows 用のネイティブ実行ファイルを同梱し、`--today --json`・`--month --json`・`--json`・`usage --json` を呼び出します。
+- 情報源は [junhoyeo/tokscale v4.17.0](https://github.com/junhoyeo/tokscale/tree/v4.17.0) です。Windows 用のネイティブ実行ファイルを同梱し、`clients --json`・`graph --no-spinner`・`usage --json`・`cursor sync --json` を呼び出します。
+- 2026-09-29 にこの PC で、`graph --no-spinner` の日別の `tokenBreakdown`（`input`・`output`・`cacheRead`・`cacheWrite`）と `totals.cost` から求めた Today・Month・All が、`--today --json`・`--month --json`・`--json` の合計と一致することを確認しました。日別の `totals.tokens` は reasoning を含むため使いません。`cursor sync --json` は失敗時も終了コード0で、`synced` と `error`（認証情報がなければ `Not authenticated`）で結果を返します。
 - 2026-09-27 にこの PC で v4.17.0 の JSON 出力を確認しました。期間集計は `totalInput`・`totalOutput`・`totalCacheRead`・`totalCacheWrite`・`totalCost` を持ち、利用枠はプロバイダーごとの `metrics` に `label`・`used_percent`・`remaining_percent`・`resets_at` を持ちました。
 
 ### TURZX 9.2インチ

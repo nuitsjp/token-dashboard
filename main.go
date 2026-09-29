@@ -173,7 +173,7 @@ func run() error {
 		default:
 		}
 	}
-	go runUsageSource(ctx, settingsService, usageState, logger, sourceChanged)
+	go runUsageSource(ctx, settingsService, usageState, logger, sourceChanged, filepath.Join(dir, "tokscale"))
 	updateReady := func(string) {}
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
@@ -238,7 +238,7 @@ func run() error {
 	return app.Run()
 }
 
-func runUsageSource(ctx context.Context, service *settings.Service, state *usage.State, logger *slog.Logger, changed <-chan struct{}) {
+func runUsageSource(ctx context.Context, service *settings.Service, state *usage.State, logger *slog.Logger, changed <-chan struct{}, tokscaleDir string) {
 	for {
 		source, err := settings.Source(service)
 		var cancel context.CancelFunc
@@ -259,7 +259,7 @@ func runUsageSource(ctx context.Context, service *settings.Service, state *usage
 						logger.Warn("local_usage_unavailable", "cause", err)
 						return
 					}
-					localusage.New(filepath.Join(filepath.Dir(path), "tokscale.exe"), state, logger).Run(child)
+					localusage.New(filepath.Join(filepath.Dir(path), "tokscale.exe"), tokscaleDir, state, logger).Run(child)
 				}
 			}()
 		}
