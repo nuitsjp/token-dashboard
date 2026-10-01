@@ -97,7 +97,8 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
     });
 
     await test.step('手順2', async () => {
-      await expect.poll(async () => (await inspect(page)).divider, { timeout: 30_000 }).toEqual(line);
+      // Reading the limits takes about 36 seconds on the GitHub runner, which has no AI tool.
+      await expect.poll(async () => (await inspect(page)).divider, { timeout: 90_000 }).toEqual(line);
       const first = await inspect(page);
       // 1,000 < 101,000 < 10,101,000. On the first of a month, yesterday is in the last month.
       if (sameMonth) expect(first.today).toBeLessThan(first.month);
@@ -161,34 +162,6 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       expect(readdirSync(join(dataDir, 'tokscale')).length).toBeGreaterThan(0);
       expect(existsSync(join(home, '.config', 'tokscale', 'cache'))).toBe(false);
     });
-  } catch (error) {
-    // TEMP-DIAGNOSTICS: shows why CI differs from local runs.
-    const { execFileSync } = await import('node:child_process');
-    const exe = join(import.meta.dirname, '../../../../../bin/tokscale.exe');
-    const run = (...args: string[]) => {
-      try {
-        return execFileSync(exe, args, { env: { ...env, TOKSCALE_CONFIG_DIR: join(home, 'diag') }, encoding: 'utf8', timeout: 60_000 });
-      } catch (e) { return `FAILED ${String(e)} ${(e as { stderr?: string }).stderr ?? ''}`; }
-    };
-    for (const args of ['clients --json', 'cursor sync --json', 'graph --no-spinner', 'usage --json']) {
-      console.log('DIAG runs', args, JSON.stringify(tokscale?.runs(args).map(r => [r.start % 100000, r.end % 100000])), 'now', Date.now() % 100000);
-    }
-    const timed = (...args: string[]) => { const t = Date.now(); const out = run(...args); console.log('DIAG timed', args.join(' '), Date.now() - t, 'ms', out.slice(0, 300)); return out; };
-    timed('cursor', 'sync', '--json');
-    timed('usage', '--json');
-    timed('graph', '--no-spinner');
-    console.log('DIAG applog', existsSync(join(dataDir, 'logs', 'app.jsonl')) ? readFileSync(join(dataDir, 'logs', 'app.jsonl'), 'utf8') : 'none');
-    const graph = run('graph', '--no-spinner');
-    try {
-      const g = JSON.parse(graph);
-      console.log('DIAG graph', JSON.stringify(g.summary?.clients), JSON.stringify(g.contributions?.map((c: { date: string; totals: unknown }) => [c.date, c.totals])));
-    } catch { console.log('DIAG graph raw', graph.slice(0, 2000)); }
-    const clients = run('clients', '--json');
-    try {
-      console.log('DIAG clients', JSON.stringify(JSON.parse(clients).clients.filter((c: { sessionsPathExists: boolean }) => c.sessionsPathExists).map((c: { client: string; sessionsPath: string }) => [c.client, c.sessionsPath])));
-    } catch { console.log('DIAG clients raw', clients.slice(0, 2000)); }
-    console.log('DIAG usage', run('usage', '--json').slice(0, 1000));
-    throw error;
   } finally {
     tokscale?.stop();
     await server?.stop();
