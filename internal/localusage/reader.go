@@ -17,30 +17,35 @@ import (
 	"token-monitor-turzx/internal/usage"
 )
 
-const (
-	// settleDelay gathers the changes that follow the first one into one update.
-	settleDelay = 2 * time.Second
-	// graphInterval is the least time between the starts of two graph runs.
-	graphInterval = 10 * time.Second
-	// pollInterval is the period of usage limits and Cursor syncs.
-	pollInterval = 45 * time.Second
-	// maxSyncDelay caps the growing wait after Cursor sync failures.
-	maxSyncDelay = 10 * time.Minute
-)
+// Intervals are the waits of the reader. Tests shorten them so as not to wait for real time.
+type Intervals struct {
+	// Settle gathers the changes that follow the first one into one update.
+	Settle time.Duration
+	// Graph is the least time between the starts of two graph runs.
+	Graph time.Duration
+	// Poll is the period of usage limits and Cursor syncs.
+	Poll time.Duration
+	// MaxSyncDelay caps the growing wait after Cursor sync failures.
+	MaxSyncDelay time.Duration
+}
+
+// DefaultIntervals are the intervals of the app.
+var DefaultIntervals = Intervals{Settle: 2 * time.Second, Graph: 10 * time.Second, Poll: 45 * time.Second, MaxSyncDelay: 10 * time.Minute}
 
 // Reader keeps the state current with usage from a local tokscale executable.
 type Reader struct {
 	executable string
 	configDir  string
 	scanFile   string
+	intervals  Intervals
 	state      *usage.State
 	logger     *slog.Logger
 }
 
 // New creates a local tokscale reader. configDir holds the tokscale settings and caches,
 // and scanFile the scan locations to watch.
-func New(executable, configDir, scanFile string, state *usage.State, logger *slog.Logger) *Reader {
-	return &Reader{executable: executable, configDir: configDir, scanFile: scanFile, state: state, logger: logger}
+func New(executable, configDir, scanFile string, intervals Intervals, state *usage.State, logger *slog.Logger) *Reader {
+	return &Reader{executable: executable, configDir: configDir, scanFile: scanFile, intervals: intervals, state: state, logger: logger}
 }
 
 type job int
@@ -114,7 +119,7 @@ type loop struct {
 // It returns after every watcher and tokscale process has stopped.
 func (r *Reader) Run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
-	l := &loop{r: r, ctx: ctx, results: make(chan result), syncDelay: pollInterval, changed: make(chan struct{}, 1)}
+	l := &loop{r: r, ctx: ctx, results: make(chan result), syncDelay: r.intervals.Poll, changed: make(chan struct{}, 1)}
 	defer l.wg.Wait()
 	defer cancel()
 	if err := os.MkdirAll(r.configDir, 0o700); err != nil {
@@ -145,7 +150,7 @@ func (r *Reader) Run(ctx context.Context) {
 			return
 		case <-l.changed:
 			if settle == nil {
-				settle = time.After(settleDelay)
+				settle = time.After(r.intervals.Settle)
 			}
 		case <-settle:
 			settle = nil
@@ -169,7 +174,7 @@ func (r *Reader) Run(ctx context.Context) {
 				l.busy = false
 				if res.err != nil {
 					r.logger.Warn("local_usage_graph_failed", "cause", res.err)
-					graphRetry = time.After(pollInterval)
+					graphRetry = time.After(r.intervals.Poll)
 				} else {
 					l.periods = &res.periods
 					l.publish()
@@ -214,7 +219,7 @@ func (l *loop) requestUsage() {
 		return
 	}
 	l.usageRunning = true
-	l.usageTick = time.After(pollInterval)
+	l.usageTick = time.After(l.r.intervals.Poll)
 	l.start(func(ctx context.Context) result {
 		limits, err := l.r.readLimits(ctx)
 		return result{job: usageJob, limits: limits, err: err}
@@ -245,7 +250,7 @@ func (l *loop) dispatch() {
 	if !l.graphWanted {
 		return
 	}
-	if wait := graphInterval - time.Since(l.lastGraph); wait > 0 {
+	if wait := l.r.intervals.Graph - time.Since(l.lastGraph); wait > 0 {
 		if l.graphReady == nil {
 			l.graphReady = time.After(wait)
 		}
@@ -322,8 +327,8 @@ func (l *loop) handleSync(res result) {
 		if res.err != nil {
 			logger.Warn("cursor_sync_partial", "cause", res.err)
 		}
-		l.syncDelay = pollInterval
-		l.syncTick = time.After(pollInterval)
+		l.syncDelay = l.r.intervals.Poll
+		l.syncTick = time.After(l.r.intervals.Poll)
 		l.graphWanted, l.withLimits = true, true
 	case cursorUnused:
 		// Cursor is not signed in. A restart checks again.
@@ -333,7 +338,7 @@ func (l *loop) handleSync(res result) {
 	case cursorFailed:
 		logger.Warn("cursor_sync_failed", "cause", res.err, "retry", l.syncDelay)
 		l.syncTick = time.After(l.syncDelay)
-		l.syncDelay = min(2*l.syncDelay, maxSyncDelay)
+		l.syncDelay = min(2*l.syncDelay, l.r.intervals.MaxSyncDelay)
 	}
 }
 
@@ -370,6 +375,9 @@ func (r *Reader) run(ctx context.Context, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, r.executable, args...)
 	command.Env = append(os.Environ(), "TOKSCALE_CONFIG_DIR="+r.configDir)
 	command.Stderr = io.Discard
+	// A process that tokscale starts can keep the output open after tokscale is killed.
+	// Without this, stopping the reader would wait for that process to end.
+	command.WaitDelay = time.Second
 	hideWindow(command)
 	output, err := command.Output()
 	if err != nil {

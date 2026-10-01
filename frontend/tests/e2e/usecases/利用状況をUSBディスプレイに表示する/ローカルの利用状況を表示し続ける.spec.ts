@@ -73,12 +73,15 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
   // Today 1,000, yesterday 100,000 and 60 days ago 10,000,000 tokens.
   appendFileSync(log, message(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 12), 10_000_000)
     + message(yesterday, 100_000) + message(now, 100, 200, 300, 400));
-  // Only the variables Windows needs to run programs pass through, because tokscale finds logs
-  // through many others, such as CODEX_HOME or XDG_DATA_HOME.
-  const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local') };
+  // tokscale finds logs through variables such as CODEX_HOME or XDG_DATA_HOME, so those are left out.
+  // The server waits 0.2, 1 and 3 seconds instead of 2, 10 and 45, so that the test does not wait
+  // for real time; the Go tests of internal/localusage check the waits themselves.
+  const env: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(process.env)) {
-    if (/^(SystemRoot|windir|SystemDrive|ComSpec|Path|PATHEXT|TEMP|TMP|OS|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(name)) env[name] = value;
+    if (!/(_HOME|_DIR|_PATH)$|^(XDG_|CODEX|CLAUDE|TOKSCALE)/i.test(name)) env[name] = value;
   }
+  Object.assign(env, { HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local'), WAILS_LOCAL_USAGE_INTERVALS: 'short' });
+  const poll = 3_000;
   const hub = await startHub();
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
   let tokscale: ReturnType<typeof watchTokscale> | undefined;
@@ -100,8 +103,7 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
     });
 
     await test.step('手順2', async () => {
-      // Reading the limits takes about 36 seconds on the GitHub runner, which has no AI tool.
-      await expect.poll(async () => (await inspect(page)).divider, { timeout: 90_000 }).toEqual(line);
+      await expect.poll(async () => (await inspect(page)).divider, { timeout: 30_000 }).toEqual(line);
       const first = await inspect(page);
       // 1,000 < 101,000 < 10,101,000. On the first of a month, yesterday is in the last month.
       if (sameMonth) expect(first.today).toBeLessThan(first.month);
@@ -122,7 +124,7 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
 
     await test.step('手順4', async () => {
       // Without log changes, only the limits are read again.
-      await page.waitForTimeout(50_000);
+      await page.waitForTimeout(poll * 1.5);
       expect(tokscale!.runs('usage --json').filter(run => run.start > idleFrom).length).toBeGreaterThanOrEqual(1);
       expect(tokscale!.runs('graph --no-spinner').filter(run => run.start > idleFrom)).toEqual([]);
       const idle = await inspect(page);
@@ -148,7 +150,7 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       await expect.poll(() => tokscale!.running(), { timeout: 5_000 }).toBe(false);
       await expect.poll(() => hub.streams(), { timeout: 10_000 }).toBeGreaterThan(0);
       const stoppedAt = Date.now();
-      await page.waitForTimeout(15_000);
+      await page.waitForTimeout(poll * 2);
       expect([...tokscale!.runs('graph --no-spinner'), ...tokscale!.runs('usage --json')].filter(run => run.end >= stoppedAt)).toEqual([]);
       await server!.stop();
       expect(await tokscale!.running()).toBe(false);

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -259,7 +260,7 @@ func runUsageSource(ctx context.Context, service *settings.Service, state *usage
 						logger.Warn("local_usage_unavailable", "cause", err)
 						return
 					}
-					localusage.New(filepath.Join(filepath.Dir(path), "tokscale.exe"), filepath.Join(dataDir, "tokscale"), filepath.Join(dataDir, "local-scan.json"), state, logger).Run(child)
+					localusage.New(filepath.Join(filepath.Dir(path), "tokscale.exe"), filepath.Join(dataDir, "tokscale"), filepath.Join(dataDir, "local-scan.json"), localIntervals(), state, logger).Run(child)
 				}
 			}()
 		}
@@ -278,6 +279,15 @@ func runUsageSource(ctx context.Context, service *settings.Service, state *usage
 		}
 	}
 }
+
+// localIntervals shortens the waits of local reading for the E2E tests, only in the server build.
+func localIntervals() localusage.Intervals {
+	if serverMode && os.Getenv("WAILS_LOCAL_USAGE_INTERVALS") == "short" {
+		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: 3 * time.Second, MaxSyncDelay: 12 * time.Second}
+	}
+	return localusage.DefaultIntervals
+}
+
 func serverPort() (int, error) {
 	if s := os.Getenv("WAILS_SERVER_PORT"); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 && n < 65536 {
