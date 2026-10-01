@@ -161,6 +161,28 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       expect(readdirSync(join(dataDir, 'tokscale')).length).toBeGreaterThan(0);
       expect(existsSync(join(home, '.config', 'tokscale', 'cache'))).toBe(false);
     });
+  } catch (error) {
+    // TEMP-DIAGNOSTICS: shows why CI differs from local runs.
+    const { execFileSync } = await import('node:child_process');
+    const exe = join(import.meta.dirname, '../../../../../bin/tokscale.exe');
+    const run = (...args: string[]) => {
+      try {
+        return execFileSync(exe, args, { env: { ...env, TOKSCALE_CONFIG_DIR: join(home, 'diag') }, encoding: 'utf8', timeout: 60_000 });
+      } catch (e) { return `FAILED ${String(e)} ${(e as { stderr?: string }).stderr ?? ''}`; }
+    };
+    console.log('DIAG env', JSON.stringify(Object.keys(process.env).sort()));
+    console.log('DIAG applog', existsSync(join(dataDir, 'logs', 'app.jsonl')) ? readFileSync(join(dataDir, 'logs', 'app.jsonl'), 'utf8') : 'none');
+    const graph = run('graph', '--no-spinner');
+    try {
+      const g = JSON.parse(graph);
+      console.log('DIAG graph', JSON.stringify(g.summary?.clients), JSON.stringify(g.contributions?.map((c: { date: string; totals: unknown }) => [c.date, c.totals])));
+    } catch { console.log('DIAG graph raw', graph.slice(0, 2000)); }
+    const clients = run('clients', '--json');
+    try {
+      console.log('DIAG clients', JSON.stringify(JSON.parse(clients).clients.filter((c: { sessionsPathExists: boolean }) => c.sessionsPathExists).map((c: { client: string; sessionsPath: string }) => [c.client, c.sessionsPath])));
+    } catch { console.log('DIAG clients raw', clients.slice(0, 2000)); }
+    console.log('DIAG usage', run('usage', '--json').slice(0, 1000));
+    throw error;
   } finally {
     tokscale?.stop();
     await server?.stop();
