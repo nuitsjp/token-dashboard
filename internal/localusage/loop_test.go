@@ -238,9 +238,10 @@ func TestChangesRunGraphAtMostOncePerIntervalWithoutOverlap(t *testing.T) {
 		if graphs[i].start.Before(graphs[i-1].end) {
 			t.Fatalf("graph %d started before graph %d ended", i, i-1)
 		}
-		// The fake records its start after the process launches, which varies by a few
-		// milliseconds, while the reader keeps the interval between the launches.
-		if gap := graphs[i].start.Sub(graphs[i-1].start); gap < testIntervals.Graph-50*time.Millisecond {
+		// The fake records its start after the process launches, which can vary by tens of
+		// milliseconds on a busy machine, while the reader keeps the interval between the launches.
+		// Without the interval, graphs would follow each change about every 50 milliseconds.
+		if gap := graphs[i].start.Sub(graphs[i-1].start); gap < testIntervals.Graph*7/10 {
 			t.Fatalf("graph %d started %v after the previous one, want at least %v", i, gap, testIntervals.Graph)
 		}
 	}

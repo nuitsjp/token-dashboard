@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // The environment of a server that shortens its waits, so that a test does not wait for real time:
-// local reading waits 0.2, 1 and 3 seconds instead of 2, 10 and 45, and the image is redrawn
+// local reading waits 0.2, 1 and 1 seconds instead of 2, 10 and 45, and the image is redrawn
 // every second instead of every minute. The Go tests check the waits themselves.
 export const shortIntervals: NodeJS.ProcessEnv = { ...process.env, WAILS_TEST_INTERVALS: 'short' };
 
 // The interval of periodic reads with shortIntervals.
-export const shortPoll = 3_000;
+export const shortPoll = 1_000;
 
 // Creates an empty home folder for tokscale, and the environment of a server whose tokscale reads
 // only that folder instead of this PC's usage and Cursor account. tokscale also finds logs through

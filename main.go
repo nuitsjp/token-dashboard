@@ -289,7 +289,7 @@ func shortIntervals() bool {
 // localIntervals are the waits of local reading.
 func localIntervals() localusage.Intervals {
 	if shortIntervals() {
-		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: 3 * time.Second, MaxSyncDelay: 12 * time.Second}
+		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: time.Second, MaxSyncDelay: 4 * time.Second}
 	}
 	return localusage.DefaultIntervals
 }

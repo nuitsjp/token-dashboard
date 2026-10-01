@@ -28,8 +28,8 @@ const points = {
 } as const;
 
 const token = 'e2e-hub-token';
-// 10 seconds past the hour, so the shown minutes change 10 seconds after sending.
-const hours = (h: number) => new Date(Date.now() + h * 3_600_000 + 10_000).toISOString();
+// 4 seconds past the hour, so the shown minutes change 4 seconds after sending.
+const hours = (h: number) => new Date(Date.now() + h * 3_600_000 + 4_000).toISOString();
 function stats(alphaRemaining: number) {
   return {
     periods: { today: { totalTokens: 1234567, costUsd: 1.23 }, month: { totalTokens: 23456789, costUsd: 23.45 }, allTime: { totalTokens: 345678901, costUsd: 345.67 } },
@@ -189,7 +189,9 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       expect((await colours(page, await preview(page))).divider).toEqual(background);
       hub.send('snapshot', stats(12));
       await expect.poll(async () => (await colours(page, await preview(page))).divider).toEqual(line);
-      const shown = await colours(page, await preview(page));
+      // Taken before the shown minutes change, to see the image drawn again after that.
+      const current = await preview(page);
+      const shown = await colours(page, current);
       expect(shown.size).toEqual([1920, 462]);
       // Contracts without a meter take no column, and alpha and beta share the first one.
       expect(shown.secondColumn).toEqual(background);
@@ -200,8 +202,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
         expect(left).toBeGreaterThan(60);
       }
       // The image is drawn again without anything from the Hub when the shown minutes change.
-      const current = await preview(page);
-      await expect.poll(() => preview(page), { timeout: 20_000, intervals: [500] }).not.toBe(current);
+      await expect.poll(() => preview(page), { timeout: 10_000, intervals: [250] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
       // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
       // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.
