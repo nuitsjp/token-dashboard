@@ -84,3 +84,15 @@ func TestConvertTokscaleQuotas(t *testing.T) {
 		t.Fatalf("date-only reset = %v, want %v", window.ResetsAt, wantDateOnlyReset)
 	}
 }
+
+func TestCountAgainJustAfterMidnight(t *testing.T) {
+	cases := []struct{ now, want time.Time }{
+		{time.Date(2026, 9, 30, 23, 59, 0, 0, time.Local), time.Date(2026, 10, 1, 0, 0, 1, 0, time.Local)},
+		{time.Date(2026, 12, 31, 0, 0, 0, 0, time.Local), time.Date(2027, 1, 1, 0, 0, 1, 0, time.Local)},
+	}
+	for _, tc := range cases {
+		if got := tc.now.Add(untilMidnight(tc.now)); !got.Equal(tc.want) {
+			t.Fatalf("after %v, count again at %v, want %v", tc.now, got, tc.want)
+		}
+	}
+}
