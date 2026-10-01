@@ -6,15 +6,16 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| 解決する問題・達成したい結果 | Token Monitor Hub に集約された AI ツールのトークン利用量・推定コストと利用枠の残量を、ブラウザーやアプリの画面を開かずに、PC に接続した TURZX の USB ディスプレイで常時確認できるようにする |
-| 利用者・利用場面 | Hub を利用する本人が、自分の Windows PC に TURZX 9.2インチを接続し、作業中に横目で利用状況を確認する |
-| 今回の対象 | 1つの Hub からのリアルタイム受信。TURZX への表示（Tokens の Today・Month・All のトークン数と推定コスト、Usage Limits）。サインイン時の自動起動とタスクトレイ常駐。接続中の TURZX 9.2インチから表示先を1台選ぶ設定（選んでいない場合は最初の1台）。プレビューと Hub の接続設定を1画面にまとめたウィンドウ。インストーラーによる導入。GitHub Releases を使った新版の確認と自動更新 |
+| 解決する問題・達成したい結果 | ローカルまたは Token Monitor Hub から取得した AI ツールのトークン利用量・推定コストと利用枠の残量を、ブラウザーやアプリの画面を開かずに、PC に接続した TURZX の USB ディスプレイで常時確認できるようにする |
+| 利用者・利用場面 | 自分の Windows PC に TURZX 9.2インチを接続し、作業中に横目で利用状況を確認する |
+| 今回の対象 | ローカルと1つの Hub から取得元を選ぶ設定（既定はローカル）と、Hub 選択時のリアルタイム受信。TURZX への表示（Tokens の Today・Month・All のトークン数と推定コスト、Usage Limits）。サインイン時の自動起動とタスクトレイ常駐。接続中の TURZX 9.2インチから表示先を1台選ぶ設定（選んでいない場合は最初の1台）。プレビューと取得元の設定を1画面にまとめたウィンドウ。インストーラーによる導入。GitHub Releases を使った新版の確認と自動更新 |
 | 今回の対象外 | 複数 Hub の同時受信と合算。利用状況の保存と履歴。Hub への書き込み。端末別・モデル別などの内訳表示。TURZX 9.2インチ以外の機種と、複数台への同時表示。動画（H.264）の送信。WinUSB ドライバーの導入。Windows 以外の OS。インストーラーのコード署名（Authenticode） |
 
 ## 2. 制約・品質要求・受け入れ条件
 
 - **動作環境**: Windows 11（x64）と WebView2 Runtime が必要です。表示先は TURZX 9.2インチ（USB `1CBE:0092`）で、WinUSB ドライバーが設定済みであることを前提にします。表示中はメーカーのソフトを終了しておきます。
 - **受信**: Hub は1つだけです。`GET /api/stats/stream` に SSE で接続し、Bearer 認証と `x-token-monitor-stream: 2` を付けます。受信が止まったときは、待ち時間を1秒から倍にしながら（上限60秒）再接続を続けます。
+- **ローカル取得**: アプリに同梱する tokscale 4.17.0 の Windows 用実行ファイルから、この端末の Today・Month・All のトークン数と推定コスト、利用枠を取得します。起動時に取得し、その後は利用記録の変更、45秒ごとの利用枠の取得、Cursor の同期（起動時に同期できた場合だけ）、日付・月の切り替わりを契機に取得し直します。取得に失敗しても前回の表示値を保ち、選択した取得元を維持します。tokscale の設定・解析キャッシュはアプリ専用のディレクトリに置きます。利用者による tokscale の別途インストールは不要です。
 - **保存しないもの**: 受信した利用状況はメモリにだけ持ち、ファイルや DB には保存しません。起動後に最初の snapshot を受信するまでは、利用状況の値を表示しません。
 - **保存するもの**: Hub の接続先 URL と認証トークンは1組にまとめ、Windows の DPAPI でユーザー単位に暗号化して、ユーザーごとの設定領域に保存します。認証トークンはログにも画面表示にも出しません。
 - **Usage Limits の表示**: Hub が報告した枠のうち、メーターを表示する指定（`showMeter`）が付いたものを、残量の割合が小さい枠を持つ契約から順に、表示領域に収まる件数だけ表示します。
@@ -32,8 +33,8 @@
 
 | ユースケース | 主アクター | 目的 | 実装順序 | 実現パターン | モック適用 |
 | --- | --- | --- | --- | --- | --- |
-| [Hubの接続設定を登録・変更する](usecases/Hubの接続設定を登録・変更する/README.md) | 利用者 | 受信する Hub の接続先 URL と認証トークンと、表示先の TURZX を設定する | 1 | [UCP-2](design/UCP-2.md) | 対象 |
-| [利用状況をUSBディスプレイに表示する](usecases/利用状況をUSBディスプレイに表示する/README.md) | 利用者 | Hub の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | [UCP-1](design/UCP-1.md) | 対象 |
+| [利用状況の取得元と表示先を設定する](usecases/利用状況の取得元と表示先を設定する/README.md) | 利用者 | 利用状況の取得元と、表示先の TURZX を設定する | 1 | [UCP-2](design/UCP-2.md) | 対象 |
+| [利用状況をUSBディスプレイに表示する](usecases/利用状況をUSBディスプレイに表示する/README.md) | 利用者 | 選択した取得元の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | [UCP-1](design/UCP-1.md) | 対象 |
 | [新版を確認してアプリを更新する](usecases/新版を確認してアプリを更新する/README.md) | 利用者 | 起動時にバックグラウンドで GitHub Releases の新版を検出し、利用者の確認後にアプリを更新する | 3 | [UCP-3](design/UCP-3.md) | 対象 |
 
 常駐（タスクトレイ、ウィンドウの表示・非表示、終了）は独立したユースケースにせず、「利用状況をUSBディスプレイに表示する」の操作の一部として扱います。
@@ -49,6 +50,12 @@
 - 全体状態の `stats.periods.today`・`month`・`allTime` は Hub 全体の集計値で、`totalTokens`（整数）と `costUsd`（数値）を持ちます。Hub は期間が終わった端末の `today`・`month` を自身の集計から除き、期間の区切りが変わると `stats` を送ります。
 - 利用枠は `stats.limits.providers[]` にアカウントごとに並び、各要素が `provider`・`accountLabel`・`planLabel` と `windows[]` を持ちます。`windows[]` の各要素は `kind`（`session`・`daily`・`weekly`・`billing`）、`showMeter`、`remainingPercent`、`usedPercent`、`resetsAt`、`label` を持ちます。`showMeter` が偽の枠は残量の割合を表示に使いません。
 - 2026-09-27 に利用者の Hub へ接続し、最初の `snapshot` のキー名と型だけを確認しました（値は記録していません）。`periods` の3期間すべてに `totalTokens` と `costUsd` があり、`limits.providers` は21件、そのうち `showMeter` が真の枠を持つのは6件で、枠は合計14件でした。
+
+### tokscale
+
+- 情報源は [junhoyeo/tokscale v4.17.0](https://github.com/junhoyeo/tokscale/tree/v4.17.0) です。Windows 用のネイティブ実行ファイルを同梱し、`clients --json`・`graph --no-spinner`・`usage --json`・`cursor sync --json` を呼び出します。
+- 2026-09-29 にこの PC で、`graph --no-spinner` の日別の `tokenBreakdown`（`input`・`output`・`cacheRead`・`cacheWrite`）と `totals.cost` から求めた Today・Month・All が、`--today --json`・`--month --json`・`--json` の合計と一致することを確認しました。日別の `totals.tokens` は reasoning を含むため使いません。`cursor sync --json` は失敗時も終了コード0で、`synced` と `error`（認証情報がなければ `Not authenticated`）で結果を返します。
+- 2026-09-27 にこの PC で v4.17.0 の JSON 出力を確認しました。期間集計は `totalInput`・`totalOutput`・`totalCacheRead`・`totalCacheWrite`・`totalCost` を持ち、利用枠はプロバイダーごとの `metrics` に `label`・`used_percent`・`remaining_percent`・`resets_at` を持ちました。
 
 ### TURZX 9.2インチ
 
@@ -74,11 +81,10 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 
 | 目的 | コマンド | 期待結果 |
 | --- | --- | --- |
-| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存、Go バインディング、ルートツリーを生成します |
+| 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存（同梱用 tokscale を含む）、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| モックでの起動 | `node scripts/run.mjs dev:mock` | 段階2・3の確認用モックを有効にして起動します。ウィンドウのタイトルの末尾に `(Mock data)` が表示されます。`dev` で起動したときは表示されません。現在、固定データへ差し替えているものはありません |
-| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev`・`dev:mock` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
-| 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します |
+| 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
+| 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します。生成のあと、画面の検査と検証用サーバーのビルド、Go のテスト、vet、文書検査を並列に実行し、出力の各行に `[check:go]` のようにタスク名を付けます |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |
 | 文書検査 | `python scripts/doc_check.py .` | NG が0件です |
 | 更新の E2E | `node scripts/run.mjs test:desktop` | 「起動時に取得した新版で更新して再起動する」の E2E が合格します。v0.1.0 と v0.2.0 のインストーラーを作り、実際にインストールして更新し、最後にアンインストールします。動いている Token Monitor TURZX をすべて止め、インストールしていない状態で、手元で実行します。`verify` には含めません |
@@ -87,10 +93,8 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 
 デスクトップ版のビルドとインストーラーの作成では、環境変数 `BUILD_APP_VERSION`・`BUILD_UPDATE_SOURCE`・`BUILD_UPDATE_PUBLIC_KEY` を指定すると、版番号・更新元・公開鍵を、`build/app.json` の代わりにその値にします（指定しない項目は `build/app.json` の値のまま）。値はビルド時に実行ファイルへ埋め込み、実行時の環境変数では変わりません。リリースの CI は `BUILD_APP_VERSION` だけをタグの版にし、更新の E2E は3つとも指定して、手元の更新元を使う版を作ります。
 
-モックの差し替えは `frontend/vite.config.ts` の別名（alias）で、確認中の系列が使うサービスのバインディングを `frontend/tests/fixtures/` の固定データへ置き換える形で行います。`WAILS_FRONTEND_MODE=mock` のときだけ有効で、本番ビルドでこの値が指定されているとビルドを中止します。サービスの呼び出しに失敗しても、固定データへは切り替えません。
-
 接続設定は `%APPDATA%\io.github.nuitsjp.token-monitor-turzx\settings.json` に保存します（形式は [データ設計](design/data.md)）。環境変数 `WAILS_DATA_DIR` に絶対パスを指定すると、そのディレクトリを使います。設定の保存・再起動後の復元は、`dev` で起動し、トレイのアイコンからウィンドウを開いて保存し、トレイのメニューの `Exit` で終了してから再び起動して確かめます。
 
-E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-tags server` のビルド）を操作します。検証用サーバーにはタスクトレイがないため、ページを開くことでトレイからウィンドウを開く操作に、プロセスの停止と起動で `Exit` と再起動に代えます。表示先の選択と `(Disconnected)` の保持は機器の接続状態に依存するため、機器の一覧を差し替えられる Go の単体テスト（`internal/settings`）で検証し、タスクトレイの操作は実機で確認します。更新の E2E だけは、インストールした本番ビルドのウィンドウを Windows の UI オートメーションで操作します。アプリをもう一度起動して既存のウィンドウを表示させることで、トレイからウィンドウを開く操作に代えます。タスクトレイのメニューの更新項目は実機で確認します。署名・対象・ハッシュが一致しない場合と、適用前の再検証の失敗は、Go の単体テスト（`internal/updates`）で検証します。
+E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-tags server` のビルド）を操作します。検証用サーバーにはタスクトレイがないため、ページを開くことでトレイからウィンドウを開く操作に、プロセスの停止と起動で `Exit` と再起動に代えます。実際の時間の経過を待たないよう、E2E は検証用サーバーを環境変数 `WAILS_TEST_INTERVALS=short` で起動し、表示画像の描き直しを1分ごとから1秒ごとに、ローカル取得のまとめ待ち・集計の間隔・周期を2秒・10秒・45秒から0.2秒・1秒・1秒に縮めます。E2E は互いに別のポートとデータフォルダーを使い、4本まで並列に実行します。この環境変数は検証用サーバーだけが読みます。ローカル取得の E2E は、検証用サーバーの `HOME`・`USERPROFILE`・`APPDATA`・`LOCALAPPDATA` を一時フォルダーに向け、ログの置き場所を変えうる環境変数（名前が `_HOME`・`_DIR`・`_PATH` で終わるもの、`XDG_` などで始まるもの）を除いて、そこに置いた Claude Code のログを同梱の tokscale に読ませます。この PC の利用状況と Cursor のログイン情報は使いません。利用記録の変更がない間に利用枠だけを取得し直すことと、取得元の変更後に tokscale が止まることは、サーバーの子プロセスを0.25秒ごとに調べて確かめます。短い実行を見逃すことがあるため、集計の重なりと間隔、利用枠の周期、取得の失敗時に前回の値を保つこと、tokscale が起動したプロセスを待たずに停止すること、探索先ファイルを使って起動時に `clients --json` を省き、新しいツールが現れたときだけ取り直すことは、テストの実行ファイルを tokscale の代わりにしてすべての実行を記録する Go の結合テスト（`internal/localusage`）で、待ち時間を縮めて並列に検証します。表示先の選択と `(Disconnected)` の保持は機器の接続状態に依存するため、機器の一覧を差し替えられる Go の単体テスト（`internal/settings`）で検証し、タスクトレイの操作は実機で確認します。更新の E2E だけは、インストールした本番ビルドのウィンドウを Windows の UI オートメーションで操作します。アプリをもう一度起動して既存のウィンドウを表示させることで、トレイからウィンドウを開く操作に代えます。タスクトレイのメニューの更新項目は実機で確認します。署名・対象・ハッシュが一致しない場合と、適用前の再検証の失敗は、Go の単体テスト（`internal/updates`）で検証します。
 
 開発時に Playwright CLI からウィンドウを操作する場合は、環境変数 `WAILS_WEBVIEW_DEBUG_PORT` にポート番号を指定して起動し、`playwright-cli attach --cdp=http://127.0.0.1:<ポート番号>` で接続します。この環境変数は本番ビルドでは無視します。ウィンドウは表示するまで WebView2 を作らないため、先にウィンドウを開いてから接続します。

@@ -1,11 +1,16 @@
 version: '3'
 
+# 並列に実行するタスクの出力を、行ごとにタスク名を付けて区別する。
+output: prefixed
+
 vars:
   # 生成先の reference/ は親ディレクトリの共通検査器を使う。
   DOC_CHECK: '{{if eq (osBase .ROOT_DIR) "reference"}}../{{end}}scripts/doc_check.py'
 
 tasks:
   generate:
+    # verify の中で build:server からも呼ばれるため、1回の実行では1度だけ生成する。
+    run: once
     cmds:
       - wails3 generate bindings -ts -i -names -f '-tags=server' -d frontend/bindings .
       - npm --prefix frontend run routes
@@ -39,15 +44,27 @@ tasks:
       - node scripts/build.mjs package
   test:core:
     cmds: [go test ./internal/... ./cmd/release/...]
-  verify:
+  # 画面の検査と検証用サーバーのビルドは frontend/ を書き換えるため、この順に1本で実行する。
+  check:frontend:
     cmds:
-      - task: generate
       - npm --prefix frontend run typecheck
       - npm --prefix frontend run lint
       - npm --prefix frontend run test
-      - go test ./internal/... ./cmd/release/...
-      - go vet ./...
-      - go vet -tags server ./...
-      - python {{.DOC_CHECK}} .
       - task: build:server
+  check:go:
+    cmds: [go test ./internal/... ./cmd/release/...]
+  check:vet:
+    cmds: [go vet ./...]
+  check:vet-server:
+    cmds: [go vet -tags server ./...]
+  check:docs:
+    cmds:
+      - python {{.DOC_CHECK}} .
+  # 生成のあと、互いに関係のない検査を並列に実行し、すべて合格したら E2E を実行する。
+  checks:
+    deps: [check:frontend, check:go, check:vet, check:vet-server, check:docs]
+  verify:
+    cmds:
+      - task: generate
+      - task: checks
       - npm --prefix frontend run test:e2e

@@ -1,4 +1,4 @@
-// Package usage holds the latest Hub statistics in memory only.
+// Package usage holds the latest statistics in memory only.
 package usage
 
 import (
@@ -47,10 +47,11 @@ type Window struct {
 type State struct {
 	mu      sync.Mutex
 	latest  *Stats
+	source  string
 	changed chan struct{}
 }
 
-func NewState() *State { return &State{changed: make(chan struct{}, 1)} }
+func NewState() *State { return &State{source: "Local", changed: make(chan struct{}, 1)} }
 
 // Set replaces the latest Stats and signals Changed without blocking.
 func (s *State) Set(stats *Stats) {
@@ -67,6 +68,24 @@ func (s *State) Latest() *Stats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.latest
+}
+
+// SetSource clears data from the previous source before the new reader starts.
+func (s *State) SetSource(source string) {
+	s.mu.Lock()
+	s.source = source
+	s.latest = nil
+	s.mu.Unlock()
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
+}
+
+func (s *State) Snapshot() (*Stats, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.latest, s.source
 }
 
 // Changed receives after one or more Set calls; only the newest value matters.

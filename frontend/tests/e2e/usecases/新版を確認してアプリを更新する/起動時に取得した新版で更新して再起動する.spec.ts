@@ -43,7 +43,7 @@ function saveSettings(dataDir: string) {
   const sealed = powershell(`Add-Type -AssemblyName System.Security
 [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes('${plain}'), [Text.Encoding]::UTF8.GetBytes('${appID}'), 'CurrentUser'))`);
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(join(dataDir, 'settings.json'), JSON.stringify({ connection: sealed, displayID: '', displayName: '' }, null, 2));
+  writeFileSync(join(dataDir, 'settings.json'), JSON.stringify({ source: 'Hub', connection: sealed, displayID: '', displayName: '' }, null, 2));
 }
 
 function uninstall() {

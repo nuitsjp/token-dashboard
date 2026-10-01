@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
+import { shortIntervals } from '../../support/local';
 
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening
 // the window, closing it for hiding the window, and stopping the process for Exit. The image is
@@ -27,8 +28,8 @@ const points = {
 } as const;
 
 const token = 'e2e-hub-token';
-// 10 seconds past the hour, so the shown minutes change 10 seconds after sending.
-const hours = (h: number) => new Date(Date.now() + h * 3_600_000 + 10_000).toISOString();
+// 4 seconds past the hour, so the shown minutes change 4 seconds after sending.
+const hours = (h: number) => new Date(Date.now() + h * 3_600_000 + 4_000).toISOString();
 function stats(alphaRemaining: number) {
   return {
     periods: { today: { totalTokens: 1234567, costUsd: 1.23 }, month: { totalTokens: 23456789, costUsd: 23.45 }, allTime: { totalTokens: 345678901, costUsd: 345.67 } },
@@ -117,18 +118,21 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
   const hub = await startHub();
-  let server = await startServer(dataDir, 34117);
+  // The server redraws every second instead of every minute.
+  let server = await startServer(dataDir, 34117, shortIntervals);
   try {
     await test.step('開始条件', async () => {
       // Precondition: the Hub connection is saved. Then the app starts as at sign-in.
       await page.goto(server.url);
+      await page.getByRole('textbox', { name: 'Data source' }).click();
+      await page.getByRole('option', { name: 'Hub' }).click();
       await page.getByLabel('Hub URL').fill(hub.url);
       await page.getByLabel(/Access token/).fill(token);
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('Saved.')).toBeVisible();
       await server.stop();
       await expect.poll(() => hub.streams()).toBe(0);
-      server = await startServer(dataDir, 34117);
+      server = await startServer(dataDir, 34117, shortIntervals);
     });
     await test.step('手順1', async () => {
       await expect.poll(() => hub.streams()).toBe(1);
@@ -177,7 +181,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     await test.step('手順6', async () => {
       await server.stop();
       await expect.poll(() => hub.streams()).toBe(0);
-      server = await startServer(dataDir, 34117);
+      server = await startServer(dataDir, 34117, shortIntervals);
     });
     await test.step('受け入れ条件', async () => {
       await page.goto(server.url);
@@ -185,7 +189,9 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       expect((await colours(page, await preview(page))).divider).toEqual(background);
       hub.send('snapshot', stats(12));
       await expect.poll(async () => (await colours(page, await preview(page))).divider).toEqual(line);
-      const shown = await colours(page, await preview(page));
+      // Taken before the shown minutes change, to see the image drawn again after that.
+      const current = await preview(page);
+      const shown = await colours(page, current);
       expect(shown.size).toEqual([1920, 462]);
       // Contracts without a meter take no column, and alpha and beta share the first one.
       expect(shown.secondColumn).toEqual(background);
@@ -195,9 +201,8 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
         expect(right).toBeLessThan(331);
         expect(left).toBeGreaterThan(60);
       }
-      // The image is drawn again within a minute without anything from the Hub.
-      const current = await preview(page);
-      await expect.poll(() => preview(page), { timeout: 70_000, intervals: [5_000] }).not.toBe(current);
+      // The image is drawn again without anything from the Hub when the shown minutes change.
+      await expect.poll(() => preview(page), { timeout: 10_000, intervals: [250] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
       // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
       // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.

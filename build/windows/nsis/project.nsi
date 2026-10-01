@@ -112,6 +112,8 @@ Section "Application"
   SetOutPath "$INSTDIR"
   ClearErrors
   File "..\..\..\bin\${APP_EXE}"
+  File "..\..\..\bin\tokscale.exe"
+  File "..\..\..\build\windows\nsis\tokscale-LICENSE.txt"
   IfErrors failed
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\${APP_ID}" "InstallDir" "$INSTDIR"
@@ -154,6 +156,8 @@ Section "Uninstall"
     MessageBox MB_ICONSTOP "アプリを終了してからアンインストールしてください。"
     Abort
   Delete "$SMPROGRAMS\${APP_NAME}.lnk"
+  Delete "$INSTDIR\tokscale.exe"
+  Delete "$INSTDIR\tokscale-LICENSE.txt"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_ID}"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
