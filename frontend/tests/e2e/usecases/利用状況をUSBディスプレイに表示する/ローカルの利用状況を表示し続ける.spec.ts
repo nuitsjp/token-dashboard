@@ -162,6 +162,21 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       expect(readdirSync(join(dataDir, 'tokscale')).length).toBeGreaterThan(0);
       expect(existsSync(join(home, '.config', 'tokscale', 'cache'))).toBe(false);
     });
+  } catch (error) {
+    // TEMP-DIAGNOSTICS: the Tokens column of the shown image, to compare CI with local runs.
+    const crop = await page.evaluate(async src => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = 360;
+      canvas.height = 462;
+      canvas.getContext('2d')!.drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    }, await preview(page)).catch(e => String(e));
+    console.log('DIAG inspect', JSON.stringify(await inspect(page).catch(e => String(e))), 'now', new Date().toString());
+    console.log('DIAG crop ' + crop);
+    throw error;
   } finally {
     tokscale?.stop();
     await server?.stop();
