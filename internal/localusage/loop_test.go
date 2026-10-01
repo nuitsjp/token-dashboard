@@ -97,7 +97,7 @@ func TestFailedGraphKeepsTheShownUsageAndCursorWithoutAccountIsNotSynced(t *test
 	}
 	state := usage.NewState()
 	var logged bytes.Buffer
-	reader := New(executable, filepath.Join(dir, "config"), state, slog.New(slog.NewTextHandler(&logged, nil)))
+	reader := New(executable, filepath.Join(dir, "config"), filepath.Join(dir, "local-scan.json"), state, slog.New(slog.NewTextHandler(&logged, nil)))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -175,7 +175,7 @@ func TestChangesRunGraphAtMostEveryTenSecondsWithoutOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := usage.NewState()
-	reader := New(executable, filepath.Join(dir, "config"), state, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	reader := New(executable, filepath.Join(dir, "config"), filepath.Join(dir, "local-scan.json"), state, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {

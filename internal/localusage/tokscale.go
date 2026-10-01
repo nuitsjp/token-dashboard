@@ -26,6 +26,9 @@ type contribution struct {
 }
 
 type graph struct {
+	Summary struct {
+		Clients []string `json:"clients"`
+	} `json:"summary"`
 	Contributions []contribution `json:"contributions"`
 }
 
@@ -70,17 +73,18 @@ const (
 	cursorFailed
 )
 
-// readPeriods reads Today, Month and All from the daily totals of one graph run.
-func (r *Reader) readPeriods(ctx context.Context) (usage.Periods, error) {
+// readPeriods reads Today, Month and All from the daily totals of one graph run,
+// with the tools that have usage.
+func (r *Reader) readPeriods(ctx context.Context) (usage.Periods, []string, error) {
 	output, err := r.run(ctx, "graph", "--no-spinner")
 	if err != nil {
-		return usage.Periods{}, err
+		return usage.Periods{}, nil, err
 	}
 	var g graph
 	if err := json.Unmarshal(output, &g); err != nil {
-		return usage.Periods{}, fmt.Errorf("parse graph: %w", err)
+		return usage.Periods{}, nil, fmt.Errorf("parse graph: %w", err)
 	}
-	return convertGraph(g, time.Now()), nil
+	return convertGraph(g, time.Now()), g.Summary.Clients, nil
 }
 
 // convertGraph sums the days of now's date and month in now's time zone, the same as tokscale.

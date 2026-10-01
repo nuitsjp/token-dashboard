@@ -3,8 +3,10 @@ package localusage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -30,13 +32,15 @@ const (
 type Reader struct {
 	executable string
 	configDir  string
+	scanFile   string
 	state      *usage.State
 	logger     *slog.Logger
 }
 
-// New creates a local tokscale reader. configDir holds the tokscale settings and caches.
-func New(executable, configDir string, state *usage.State, logger *slog.Logger) *Reader {
-	return &Reader{executable: executable, configDir: configDir, state: state, logger: logger}
+// New creates a local tokscale reader. configDir holds the tokscale settings and caches,
+// and scanFile the scan locations to watch.
+func New(executable, configDir, scanFile string, state *usage.State, logger *slog.Logger) *Reader {
+	return &Reader{executable: executable, configDir: configDir, scanFile: scanFile, state: state, logger: logger}
 }
 
 type job int
@@ -45,15 +49,30 @@ const (
 	graphJob job = iota
 	usageJob
 	syncJob
+	scanJob
 )
 
 type result struct {
 	job     job
 	periods usage.Periods
+	clients []string
 	limits  usage.Limits
 	cursor  cursorOutcome
+	paths   []string
 	err     error
 }
+
+// afterScan is what the next successful graph does with its clients after `clients --json`.
+type afterScan int
+
+const (
+	scanDone afterScan = iota
+	// scanSave saves the new paths with the graph's clients.
+	scanSave
+	// scanAdopt takes the graph's clients as known without saving, after a failed scan,
+	// so that the same tools do not start another scan.
+	scanAdopt
+)
 
 // loop is the state of one Run. Only the Run goroutine touches it.
 type loop struct {
@@ -66,8 +85,15 @@ type loop struct {
 	limits    *usage.Limits
 	published *usage.Stats
 
-	// Sync and graph share one slot so that a graph never runs during a sync.
+	changed   chan struct{}
+	stopWatch context.CancelFunc
+	paths     []string
+	known     map[string]bool
+	afterScan afterScan
+
+	// Scan, sync and graph share one slot so that no two of them run at once.
 	busy        bool
+	scanWanted  bool
 	syncWanted  bool
 	graphWanted bool
 	// withLimits reads the usage limits when the queued graph starts,
@@ -88,7 +114,7 @@ type loop struct {
 // It returns after every watcher and tokscale process has stopped.
 func (r *Reader) Run(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
-	l := &loop{r: r, ctx: ctx, results: make(chan result), syncDelay: pollInterval}
+	l := &loop{r: r, ctx: ctx, results: make(chan result), syncDelay: pollInterval, changed: make(chan struct{}, 1)}
 	defer l.wg.Wait()
 	defer cancel()
 	if err := os.MkdirAll(r.configDir, 0o700); err != nil {
@@ -96,23 +122,15 @@ func (r *Reader) Run(ctx context.Context) {
 		return
 	}
 
-	changed := make(chan struct{}, 1)
-	notify := func() {
-		select {
-		case changed <- struct{}{}:
-		default:
+	// The saved scan locations spare the costly `clients --json` at each start.
+	if saved, err := loadScan(r.scanFile); err == nil {
+		l.known = set(saved.Clients)
+		l.watch(saved.Paths)
+	} else {
+		if !errors.Is(err, fs.ErrNotExist) {
+			r.logger.Warn("local_usage_scan_unreadable", "cause", err)
 		}
-	}
-	paths, err := r.watchPaths(ctx)
-	if err != nil && ctx.Err() == nil {
-		r.logger.Warn("local_usage_watch_unavailable", "cause", err)
-	}
-	for _, path := range paths {
-		l.wg.Go(func() {
-			if err := watch(ctx, path, notify); err != nil && ctx.Err() == nil {
-				r.logger.Warn("local_usage_watch_stopped", "path", path, "cause", err)
-			}
-		})
+		l.scanWanted = true
 	}
 
 	// At start, the Cursor sync decides whether to keep syncing, and the graph follows it.
@@ -125,7 +143,7 @@ func (r *Reader) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-changed:
+		case <-l.changed:
 			if settle == nil {
 				settle = time.After(settleDelay)
 			}
@@ -155,6 +173,7 @@ func (r *Reader) Run(ctx context.Context) {
 				} else {
 					l.periods = &res.periods
 					l.publish()
+					l.checkClients(res.clients)
 				}
 			case usageJob:
 				l.usageRunning = false
@@ -171,6 +190,16 @@ func (r *Reader) Run(ctx context.Context) {
 			case syncJob:
 				l.busy = false
 				l.handleSync(res)
+			case scanJob:
+				l.busy = false
+				if res.err != nil {
+					r.logger.Warn("local_usage_scan_failed", "cause", res.err)
+					l.afterScan = scanAdopt
+				} else {
+					l.watch(res.paths)
+					l.afterScan = scanSave
+				}
+				l.graphWanted = true
 			}
 		}
 		l.dispatch()
@@ -192,9 +221,17 @@ func (l *loop) requestUsage() {
 	})
 }
 
-// dispatch starts the queued sync or graph when the slot is free, the sync first.
+// dispatch starts the queued scan, sync or graph when the slot is free, in that order.
 func (l *loop) dispatch() {
 	if l.busy {
+		return
+	}
+	if l.scanWanted {
+		l.scanWanted, l.busy = false, true
+		l.start(func(ctx context.Context) result {
+			paths, err := l.r.watchPaths(ctx)
+			return result{job: scanJob, paths: paths, err: err}
+		})
 		return
 	}
 	if l.syncWanted {
@@ -221,9 +258,61 @@ func (l *loop) dispatch() {
 		l.requestUsage()
 	}
 	l.start(func(ctx context.Context) result {
-		periods, err := l.r.readPeriods(ctx)
-		return result{job: graphJob, periods: periods, err: err}
+		periods, clients, err := l.r.readPeriods(ctx)
+		return result{job: graphJob, periods: periods, clients: clients, err: err}
 	})
+}
+
+// checkClients saves or adopts the clients of the graph that follows a scan. Otherwise a
+// tool that is not known means a new tool, whose scan locations a new scan finds.
+func (l *loop) checkClients(clients []string) {
+	switch l.afterScan {
+	case scanSave:
+		if err := saveScan(l.r.scanFile, scan{Paths: l.paths, Clients: clients}); err != nil {
+			l.r.logger.Warn("local_usage_scan_save_failed", "cause", err)
+		}
+		fallthrough
+	case scanAdopt:
+		l.known, l.afterScan = set(clients), scanDone
+		return
+	}
+	for _, client := range clients {
+		if !l.known[client] {
+			l.r.logger.Info("local_usage_new_client", "client", client)
+			l.scanWanted = true
+			return
+		}
+	}
+}
+
+// watch replaces the watched scan locations with paths.
+func (l *loop) watch(paths []string) {
+	if l.stopWatch != nil {
+		l.stopWatch()
+	}
+	ctx, stop := context.WithCancel(l.ctx)
+	l.stopWatch, l.paths = stop, paths
+	notify := func() {
+		select {
+		case l.changed <- struct{}{}:
+		default:
+		}
+	}
+	for _, path := range paths {
+		l.wg.Go(func() {
+			if err := watch(ctx, path, notify); err != nil && ctx.Err() == nil {
+				l.r.logger.Warn("local_usage_watch_stopped", "path", path, "cause", err)
+			}
+		})
+	}
+}
+
+func set(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, v := range values {
+		out[v] = true
+	}
+	return out
 }
 
 func (l *loop) handleSync(res result) {
