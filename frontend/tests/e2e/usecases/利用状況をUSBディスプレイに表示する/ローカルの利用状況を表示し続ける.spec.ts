@@ -9,7 +9,7 @@ import { watchTokscale } from '../../support/processes';
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening
 // the window, and stopping the process for Exit. tokscale reads a Claude Code log in a separate
 // home folder instead of this PC's usage, and has no Cursor account there. The tokens are checked
-// by where each number ends on the 1920x462 image: a longer number ends further right.
+// by the width of each number on the 1920x462 image: a longer number is wider.
 const background = [15, 17, 23];
 const line = [42, 47, 58]; // the divider between Tokens and Usage Limits
 const tokenRows = { today: [0, 75, 350, 110], month: [0, 215, 350, 250], all: [0, 355, 350, 390] } as const;
@@ -20,7 +20,7 @@ async function preview(page: Page) {
   return (await image.getAttribute('src')) ?? '';
 }
 
-// Returns the divider colour and the rightmost x of the drawn pixels in each token row.
+// Returns the divider colour and the width of the drawn pixels in each token row.
 async function inspect(page: Page) {
   return page.evaluate(async ({ src, rows }) => {
     const img = new Image();
@@ -31,17 +31,20 @@ async function inspect(page: Page) {
     canvas.height = img.naturalHeight;
     const context = canvas.getContext('2d')!;
     context.drawImage(img, 0, 0);
-    const ends: Record<string, number> = {};
+    const widths: Record<string, number> = {};
     for (const [name, [left, top, right, bottom]] of Object.entries(rows)) {
       const data = context.getImageData(left, top, right - left, bottom - top).data;
-      let max = -1;
+      let min = Infinity;
+      let max = -Infinity;
       for (let i = 0; i < data.length; i += 4) {
         if (data[i] === 15 && data[i + 1] === 17 && data[i + 2] === 23) continue;
-        max = Math.max(max, left + ((i / 4) % (right - left)));
+        const x = left + ((i / 4) % (right - left));
+        min = Math.min(min, x);
+        max = Math.max(max, x);
       }
-      ends[name] = max;
+      widths[name] = max - min;
     }
-    return { divider: [...context.getImageData(356, 231, 1, 1).data.slice(0, 3)], ...ends } as { divider: number[]; today: number; month: number; all: number };
+    return { divider: [...context.getImageData(356, 231, 1, 1).data.slice(0, 3)], ...widths } as { divider: number[]; today: number; month: number; all: number };
   }, { src: await preview(page), rows: tokenRows });
 }
 
