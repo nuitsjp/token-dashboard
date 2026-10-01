@@ -22,9 +22,19 @@ jobs:
         working-directory: ${{ matrix.directory }}
     steps:
       - uses: actions/checkout@v4
+      # setup-go caches under a key that does not change with the cache folders, so a cache saved from
+      # C: would be restored there. This cache keeps the D: folders above under its own key.
       - uses: actions/setup-go@v5
         with:
           go-version-file: ${{ matrix.directory }}/go.mod
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            D:\go\cache
+            D:\go\mod
+          key: go-d-${{ runner.os }}-${{ matrix.directory }}-${{ hashFiles(format('{0}/go.sum', matrix.directory)) }}
+          restore-keys: go-d-${{ runner.os }}-${{ matrix.directory }}-
       - uses: actions/setup-node@v4
         with:
           node-version-file: ${{ matrix.directory }}/.nvmrc

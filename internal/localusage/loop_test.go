@@ -49,12 +49,14 @@ const holdOutput = "LOCALUSAGE_HOLD_OUTPUT"
 // wait for 30 seconds.
 func actAsTokscale(dir string) {
 	args := strings.Join(os.Args[1:], " ")
-	record := func(event string) {
+	record := func(event string, at time.Time) {
 		log, _ := os.OpenFile(filepath.Join(dir, "calls.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-		fmt.Fprintf(log, "%s|%s|%d\n", event, args, time.Now().UnixNano())
+		fmt.Fprintf(log, "%s|%s|%d\n", event, args, at.UnixNano())
 		log.Close()
 	}
-	record("start")
+	// The start is when the reader created the process, not when it began to run, which a busy
+	// machine can delay by hundreds of milliseconds.
+	record("start", processCreated())
 	if _, err := os.Stat(filepath.Join(dir, os.Args[1]+".hold")); err == nil {
 		child := exec.Command(os.Args[0])
 		child.Env = append(os.Environ(), holdOutput+"=1")
@@ -67,7 +69,7 @@ func actAsTokscale(dir string) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	output, err := os.ReadFile(filepath.Join(dir, os.Args[1]+".json"))
-	record("end")
+	record("end", time.Now())
 	if err != nil {
 		os.Exit(1)
 	}
