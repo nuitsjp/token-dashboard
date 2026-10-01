@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
+import { shortIntervals } from '../../support/local';
 
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening
 // the window, closing it for hiding the window, and stopping the process for Exit. The image is
@@ -117,7 +118,8 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
   const hub = await startHub();
-  let server = await startServer(dataDir, 34117);
+  // The server redraws every second instead of every minute.
+  let server = await startServer(dataDir, 34117, shortIntervals);
   try {
     await test.step('開始条件', async () => {
       // Precondition: the Hub connection is saved. Then the app starts as at sign-in.
@@ -130,7 +132,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       await expect(page.getByText('Saved.')).toBeVisible();
       await server.stop();
       await expect.poll(() => hub.streams()).toBe(0);
-      server = await startServer(dataDir, 34117);
+      server = await startServer(dataDir, 34117, shortIntervals);
     });
     await test.step('手順1', async () => {
       await expect.poll(() => hub.streams()).toBe(1);
@@ -179,7 +181,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     await test.step('手順6', async () => {
       await server.stop();
       await expect.poll(() => hub.streams()).toBe(0);
-      server = await startServer(dataDir, 34117);
+      server = await startServer(dataDir, 34117, shortIntervals);
     });
     await test.step('受け入れ条件', async () => {
       await page.goto(server.url);
@@ -197,9 +199,9 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
         expect(right).toBeLessThan(331);
         expect(left).toBeGreaterThan(60);
       }
-      // The image is drawn again within a minute without anything from the Hub.
+      // The image is drawn again without anything from the Hub when the shown minutes change.
       const current = await preview(page);
-      await expect.poll(() => preview(page), { timeout: 70_000, intervals: [5_000] }).not.toBe(current);
+      await expect.poll(() => preview(page), { timeout: 20_000, intervals: [500] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
       // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
       // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.

@@ -166,7 +166,7 @@ func run() error {
 		go output.Run(ctx)
 		sink = output.Submit
 	}
-	go display.Run(ctx, displayService, renderer, usageState, sink, emit, logger)
+	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -280,12 +280,26 @@ func runUsageSource(ctx context.Context, service *settings.Service, state *usage
 	}
 }
 
-// localIntervals shortens the waits of local reading for the E2E tests, only in the server build.
+// shortIntervals lets the E2E tests shorten the app's waits so that they do not wait for real time.
+// Only the server build, which the tests use, reads it.
+func shortIntervals() bool {
+	return serverMode && os.Getenv("WAILS_TEST_INTERVALS") == "short"
+}
+
+// localIntervals are the waits of local reading.
 func localIntervals() localusage.Intervals {
-	if serverMode && os.Getenv("WAILS_LOCAL_USAGE_INTERVALS") == "short" {
+	if shortIntervals() {
 		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: 3 * time.Second, MaxSyncDelay: 12 * time.Second}
 	}
 	return localusage.DefaultIntervals
+}
+
+// redrawInterval is the longest time between two images, which keeps the time until reset current.
+func redrawInterval() time.Duration {
+	if shortIntervals() {
+		return time.Second
+	}
+	return time.Minute
 }
 
 func serverPort() (int, error) {

@@ -58,7 +58,9 @@ try {
     if (!match) throw new Error('Wails version is missing from go.mod');
     mkdirSync(tools, { recursive: true });
     // No silently substituted local CLI or hand-authored generated files.
-    run('go', ['install', `github.com/wailsapp/wails/v3/cmd/wails3@${match[1]}`], root, { GOBIN: tools });
+    // A CLI of the same version, such as one that the CI restored from its cache, is kept.
+    const installed = existsSync(cli) ? spawnSync(cli, ['version'], { encoding: 'utf8' }).stdout?.trim() : '';
+    if (installed !== match[1]) run('go', ['install', `github.com/wailsapp/wails/v3/cmd/wails3@${match[1]}`], root, { GOBIN: tools });
     run('go', ['mod', 'tidy']);
     run('npm', [existsSync('frontend/package-lock.json') ? 'ci' : 'install', '--no-audit', '--no-fund'], resolve('frontend'));
     run(cli, ['task', 'generate']);

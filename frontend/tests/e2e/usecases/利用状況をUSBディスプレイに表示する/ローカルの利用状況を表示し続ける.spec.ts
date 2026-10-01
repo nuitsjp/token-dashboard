@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { watchTokscale } from '../../support/processes';
+import { localHome, shortPoll as poll } from '../../support/local';
 
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening
 // the window, and stopping the process for Exit. tokscale reads a Claude Code log in a separate
@@ -59,29 +60,18 @@ function message(at: Date, input: number, output = 0, cacheRead = 0, cacheWrite 
 }
 
 test('ローカルの利用記録の変化に合わせて表示を更新し、取得元を変えると取得を止める', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(120_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-local-usage-e2e-'));
-  const home = mkdtempSync(join(tmpdir(), 'turzx-local-home-e2e-'));
+  const { home, env } = localHome();
   const sessions = join(home, '.claude', 'projects', 'e2e');
   const log = join(sessions, 'session.jsonl');
   mkdirSync(sessions, { recursive: true });
-  mkdirSync(join(home, 'AppData', 'Roaming'), { recursive: true });
-  mkdirSync(join(home, 'AppData', 'Local'), { recursive: true });
   const now = new Date();
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12);
   const sameMonth = yesterday.getMonth() === now.getMonth();
   // Today 1,000, yesterday 100,000 and 60 days ago 10,000,000 tokens.
   appendFileSync(log, message(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60, 12), 10_000_000)
     + message(yesterday, 100_000) + message(now, 100, 200, 300, 400));
-  // tokscale finds logs through variables such as CODEX_HOME or XDG_DATA_HOME, so those are left out.
-  // The server waits 0.2, 1 and 3 seconds instead of 2, 10 and 45, so that the test does not wait
-  // for real time; the Go tests of internal/localusage check the waits themselves.
-  const env: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(process.env)) {
-    if (!/(_HOME|_DIR|_PATH)$|^(XDG_|CODEX|CLAUDE|TOKSCALE)/i.test(name)) env[name] = value;
-  }
-  Object.assign(env, { HOME: home, USERPROFILE: home, APPDATA: join(home, 'AppData', 'Roaming'), LOCALAPPDATA: join(home, 'AppData', 'Local'), WAILS_LOCAL_USAGE_INTERVALS: 'short' });
-  const poll = 3_000;
   const hub = await startHub();
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
   let tokscale: ReturnType<typeof watchTokscale> | undefined;

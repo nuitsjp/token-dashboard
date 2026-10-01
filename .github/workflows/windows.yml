@@ -13,6 +13,10 @@ jobs:
       matrix:
         directory: [., reference]
     runs-on: windows-latest
+    env:
+      # The D: drive of the runner is much faster than C:, where restoring the Go cache took 55 seconds.
+      GOCACHE: D:\go\cache
+      GOMODCACHE: D:\go\mod
     defaults:
       run:
         working-directory: ${{ matrix.directory }}
@@ -29,6 +33,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      # Building the Wails CLI took about 50 seconds. setup keeps a restored CLI of the same version.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.directory }}/.tools
+          key: wails-cli-${{ runner.os }}-${{ hashFiles(format('{0}/go.mod', matrix.directory)) }}
       - name: Dependencies and generated sources
         run: node scripts/run.mjs setup
       - name: Browser

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../../support/server';
+import { localHome } from '../../support/local';
 
 // The server has no task tray or USB output. Opening the page stands in for opening
 // the window, and stopping the process stands in for Exit.
@@ -24,7 +25,9 @@ async function divider(page: Page) {
 test('Local と表示先を保存し、再起動後もローカルの利用状況を表示する', async ({ page }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-local-settings-e2e-'));
-  let server = await startServer(dataDir, 34118);
+  // tokscale reads an empty home folder, so the usage shown does not depend on this PC.
+  const { home, env } = localHome();
+  let server = await startServer(dataDir, 34118, env);
   const source = page.getByRole('textbox', { name: 'Data source' });
   const device = page.getByRole('textbox', { name: 'Output device' });
   let selectedDevice = 'Automatic';
@@ -65,7 +68,7 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
     });
     await test.step('手順4', async () => {
       await server.stop();
-      server = await startServer(dataDir, 34118);
+      server = await startServer(dataDir, 34118, env);
       await page.goto(server.url);
       await expect(source).toHaveValue('Local');
       await expect(device).toHaveValue(selectedDevice);
@@ -80,5 +83,6 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
   } finally {
     await server.stop();
     rmSync(dataDir, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
 });
