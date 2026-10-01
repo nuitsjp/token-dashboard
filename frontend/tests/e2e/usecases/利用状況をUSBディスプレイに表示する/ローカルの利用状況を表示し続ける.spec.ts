@@ -170,7 +170,13 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
         return execFileSync(exe, args, { env: { ...env, TOKSCALE_CONFIG_DIR: join(home, 'diag') }, encoding: 'utf8', timeout: 60_000 });
       } catch (e) { return `FAILED ${String(e)} ${(e as { stderr?: string }).stderr ?? ''}`; }
     };
-    console.log('DIAG env', JSON.stringify(Object.keys(process.env).sort()));
+    for (const args of ['clients --json', 'cursor sync --json', 'graph --no-spinner', 'usage --json']) {
+      console.log('DIAG runs', args, JSON.stringify(tokscale?.runs(args).map(r => [r.start % 100000, r.end % 100000])), 'now', Date.now() % 100000);
+    }
+    const timed = (...args: string[]) => { const t = Date.now(); const out = run(...args); console.log('DIAG timed', args.join(' '), Date.now() - t, 'ms', out.slice(0, 300)); return out; };
+    timed('cursor', 'sync', '--json');
+    timed('usage', '--json');
+    timed('graph', '--no-spinner');
     console.log('DIAG applog', existsSync(join(dataDir, 'logs', 'app.jsonl')) ? readFileSync(join(dataDir, 'logs', 'app.jsonl'), 'utf8') : 'none');
     const graph = run('graph', '--no-spinner');
     try {
