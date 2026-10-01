@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -223,5 +225,111 @@ func TestChangesRunGraphAtMostEveryTenSecondsWithoutOverlap(t *testing.T) {
 	// Changes read the limits with each graph, not with each change.
 	if len(limits) > len(graphs)+1 {
 		t.Fatalf("usage ran %d times with %d graphs", len(limits), len(graphs))
+	}
+}
+
+func TestSavedScanSkipsClientsUntilANewToolAppears(t *testing.T) {
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	os.Mkdir(logs, 0o700)
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sessions, _ := json.Marshal(logs)
+	write("clients.json", `{"clients":[{"client":"claude","sessionsPath":`+string(sessions)+`},{"client":"cursor","sessionsPath":`+string(sessions)+`}]}`)
+	write("cursor.json", `{"synced":false,"rows":0,"error":"Not authenticated"}`)
+	write("usage.json", `[]`)
+	graphWith := func(clients string) {
+		write("graph.json", `{"summary":{"clients":[`+clients+`]},"contributions":[]}`)
+	}
+	graphWith(`"claude","cursor"`)
+	t.Setenv(fakeDir, dir)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanFile := filepath.Join(dir, "local-scan.json")
+	// start runs a reader until the usage is shown, and returns the function that stops it.
+	start := func() func() {
+		t.Helper()
+		state := usage.NewState()
+		reader := New(executable, filepath.Join(dir, "config"), scanFile, state, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			reader.Run(ctx)
+			close(done)
+		}()
+		select {
+		case <-state.Changed():
+		case <-time.After(10 * time.Second):
+			t.Fatal("no usage was shown")
+		}
+		return func() {
+			cancel()
+			<-done
+		}
+	}
+	saved := func() scan {
+		t.Helper()
+		s, err := loadScan(scanFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	scans := func() int { return len(runs(t, dir, "clients --json")) }
+
+	// The first start has no saved scan, so it runs clients and saves the paths without Cursor's.
+	stop := start()
+	stop()
+	if n := scans(); n != 1 {
+		t.Fatalf("first start ran clients %d times, want once", n)
+	}
+	if s := saved(); !reflect.DeepEqual(s.Paths, []string{logs}) || !reflect.DeepEqual(s.Clients, []string{"claude", "cursor"}) {
+		t.Fatalf("saved scan = %+v", s)
+	}
+
+	// The next start watches the saved paths without running clients.
+	stop = start()
+	os.WriteFile(filepath.Join(logs, "session.jsonl"), []byte("1"), 0o600)
+	deadline := time.Now().Add(20 * time.Second)
+	for len(runs(t, dir, "graph --no-spinner")) < 3 && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if n := len(runs(t, dir, "graph --no-spinner")); n != 3 {
+		t.Fatalf("a change under the saved path ran %d graphs in all, want 3", n)
+	}
+	if n := scans(); n != 1 {
+		t.Fatalf("second start ran clients again; %d runs in all", n)
+	}
+
+	// A tool that graph shows for the first time runs clients once and is saved.
+	graphWith(`"claude","cursor","gemini"`)
+	os.WriteFile(filepath.Join(logs, "session.jsonl"), []byte("2"), 0o600)
+	deadline = time.Now().Add(30 * time.Second)
+	for !slices.Contains(saved().Clients, "gemini") && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	// One more graph with the same tools must not run clients again.
+	graphs := len(runs(t, dir, "graph --no-spinner"))
+	os.WriteFile(filepath.Join(logs, "session.jsonl"), []byte("3"), 0o600)
+	deadline = time.Now().Add(20 * time.Second)
+	for len(runs(t, dir, "graph --no-spinner")) == graphs && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	time.Sleep(time.Second)
+	stop()
+	if len(runs(t, dir, "graph --no-spinner")) == graphs {
+		t.Fatal("the last change ran no graph")
+	}
+	if s := saved(); !reflect.DeepEqual(s.Clients, []string{"claude", "cursor", "gemini"}) {
+		t.Fatalf("after the new tool, saved scan = %+v", s)
+	}
+	if n := scans(); n != 2 {
+		t.Fatalf("the new tool ran clients %d times in all, want 2", n)
 	}
 }
