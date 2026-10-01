@@ -313,14 +313,30 @@ func TestSavedScanSkipsClientsUntilANewToolAppears(t *testing.T) {
 	// A tool that graph shows for the first time runs clients once and is saved.
 	f.write("graph.json", `{"summary":{"clients":["claude","cursor","gemini"]},"contributions":[]}`)
 	f.change("2")
-	waitFor(t, 15*time.Second, "gemini to be saved", func() bool { return slices.Contains(saved().Clients, "gemini") })
+	// The file is read only after the reader stops: while it is open, Windows refuses to replace it.
+	finishedAfter := func(at time.Time) bool {
+		for _, g := range f.runs("graph --no-spinner") {
+			if g.start.After(at) && !g.end.IsZero() {
+				return true
+			}
+		}
+		return false
+	}
+	waitFor(t, 15*time.Second, "clients to run again", func() bool { return scans() == 2 })
+	waitFor(t, 15*time.Second, "the graph that saves the new tool", func() bool {
+		s := f.runs("clients --json")
+		return !s[1].end.IsZero() && finishedAfter(s[1].end)
+	})
 	// One more graph with the same tools must not run clients again.
-	graphs := len(f.runs("graph --no-spinner"))
+	changed := time.Now()
 	f.change("3")
-	waitFor(t, 15*time.Second, "the graph after the last change", func() bool { return len(f.runs("graph --no-spinner")) > graphs })
+	waitFor(t, 15*time.Second, "the graph after the last change", func() bool { return finishedAfter(changed) })
 	stop()
 	if n := scans(); n != 2 {
 		t.Fatalf("the new tool ran clients %d times in all, want 2", n)
+	}
+	if s := saved(); !slices.Contains(s.Clients, "gemini") {
+		t.Fatalf("after the new tool, saved scan = %+v", s)
 	}
 }
 
