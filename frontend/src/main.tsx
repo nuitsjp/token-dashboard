@@ -9,7 +9,13 @@ import { reportFrontendError } from './features/application/queries';
 import './style.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element is missing');
-const theme = createTheme({ primaryColor: 'blue', defaultRadius: 'md', fontFamily: 'system-ui, sans-serif' });
+// Dark palette shared with multi-token-monitor: 7 is the page, 6 the card surface.
+const theme = createTheme({
+  primaryColor: 'violet',
+  defaultRadius: 'lg',
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", sans-serif',
+  colors: { dark: ['#e4e5e9', '#b4b6bf', '#8b8e99', '#5d6070', '#3a3d48', '#2c2e36', '#1f2126', '#16171b', '#111215', '#0b0c0e'] },
+});
 createRoot(root, { onUncaughtError: reportFrontendError, onCaughtError: reportFrontendError }).render(
   <React.StrictMode><MantineProvider theme={theme} forceColorScheme="dark"><QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider></MantineProvider></React.StrictMode>,
 );

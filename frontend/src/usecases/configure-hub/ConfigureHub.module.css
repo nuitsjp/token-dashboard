@@ -1,0 +1,4 @@
+.row { display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: center; padding: 14px 0; border-top: 1px solid var(--mantine-color-dark-5); }
+.row:first-of-type { border-top: 0; }
+.bar { border-top: 1px solid var(--mantine-color-dark-5); }
+@media(max-width: 760px) { .row { grid-template-columns: 1fr; gap: 8px; } }

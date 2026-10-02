@@ -31,17 +31,20 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
   const source = page.getByRole('textbox', { name: 'Data source' });
   const device = page.getByRole('textbox', { name: 'Output device' });
   let selectedDevice = 'Automatic';
+  const open = (name: 'Display' | 'Connection') => page.getByRole('link', { name }).click();
   try {
     await test.step('開始条件', async () => {
       await page.goto(server.url);
     });
     await test.step('手順1', async () => {
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+      await open('Connection');
+      await expect(page.getByRole('heading', { name: 'Connection settings' })).toBeVisible();
       await expect(source).toHaveValue('Local');
       await source.click();
       await expect(page.getByRole('option', { name: 'Local' })).toBeVisible();
       await expect(page.getByRole('option', { name: 'Hub' })).toBeVisible();
       await page.keyboard.press('Escape');
+      await open('Display');
       await device.click();
       await expect(page.getByRole('option', { name: 'Automatic' })).toBeVisible();
       const connected = page.getByRole('option', { name: /^TURZX.*\([0-9A-F]{8}\)$/ });
@@ -49,36 +52,45 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await page.keyboard.press('Escape');
     });
     await test.step('手順2', async () => {
+      await open('Connection');
       await source.click();
       await page.getByRole('option', { name: 'Local' }).click();
-      await device.click();
-      await page.getByRole('option', { name: selectedDevice, exact: true }).click();
       await expect(source).toHaveValue('Local');
-      await expect(device).toHaveValue(selectedDevice);
-      await expect(page.getByText('Saved.')).toHaveCount(0);
-    });
-    await test.step('手順3', async () => {
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('Saved.')).toBeVisible();
       const saved = JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
       expect(saved.source).toBe('Local');
-      expect(saved.displayName || 'Automatic').toBe(selectedDevice);
       expect(saved.connection).toBeUndefined();
+    });
+    await test.step('手順3', async () => {
+      await open('Display');
+      await device.click();
+      await page.getByRole('option', { name: selectedDevice, exact: true }).click();
+      await expect(device).toHaveValue(selectedDevice);
+      await expect(page.getByText('Saved.')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByText('Saved.')).toBeVisible();
+      const saved = JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
+      expect(saved.displayName || 'Automatic').toBe(selectedDevice);
       await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);
     });
     await test.step('手順4', async () => {
       await server.stop();
       server = await startServer(dataDir, 34118, env);
       await page.goto(server.url);
+      await open('Connection');
       await expect(source).toHaveValue('Local');
+      await open('Display');
       await expect(device).toHaveValue(selectedDevice);
     });
     await test.step('受け入れ条件', async () => {
+      await open('Connection');
       await expect(page.getByLabel('Hub URL')).toHaveCount(0);
       await expect(page.getByLabel(/Access token/)).toHaveCount(0);
-      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);
       await expect(page.getByRole('heading', { name: 'Usage source' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Display' })).toBeVisible();
+      await open('Display');
+      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);
+      await expect(page.getByRole('heading', { name: 'Output' })).toBeVisible();
     });
   } finally {
     await server.stop();

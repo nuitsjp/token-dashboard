@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from '@tanstack/react-router';
+import { Link, Outlet } from '@tanstack/react-router';
 import { useIsMutating, useQuery } from '@tanstack/react-query';
-import { Alert, Button, Group, Modal, Stack, Text } from '@mantine/core';
+import { Alert, Button, Group, Modal, NavLink, Stack, Text } from '@mantine/core';
 import { appInfo, confirmQuit, ready, subscribeClose } from '../features/application/queries';
 import { ErrorNotice } from '../shared/ErrorNotice';
 import { ExitProvider, useExit } from '../shared/ExitContext';
+import { SettingsDraftProvider } from '../usecases/configure-hub/SettingsDraft';
+import { UpdateApp } from '../usecases/update-app/UpdateApp';
 import styles from './Shell.module.css';
+
+const icon = (path: string) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={path} /></svg>;
+const logo = icon('M4 18V9M10 18V5M16 18v-7M22 18H2');
 
 function Content() {
   const info = useQuery(appInfo());
@@ -20,10 +25,19 @@ function Content() {
   }, []);
   async function close() { try { await confirmQuit(); } catch (failure) { setError(failure); } }
   return <div className={styles.shell}>
+    <nav className={styles.side} aria-label="Menu">
+      <div className={styles.brand}><span className={styles.logo}>{logo}</span><Text fw={700} lh={1.2}>Token Monitor<br />TURZX</Text></div>
+      <NavLink component={Link} to="/" label="Display" leftSection={icon('M3 4h18v12H3zM8 20h8M12 16v4')} activeOptions={{ exact: true }} />
+      <NavLink component={Link} to="/connection" label="Connection" leftSection={icon('M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01')} />
+      <Text size="xs" c="dimmed" className={styles.version}>{info.data ? `Version ${info.data.version}` : ''}</Text>
+    </nav>
     <main className={styles.main}>
-      <ErrorNotice error={info.error || error} />
-      {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow" mb="lg">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}
-      <Outlet />
+      <Stack gap="md">
+        <UpdateApp />
+        <ErrorNotice error={info.error || error} />
+        {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}
+        <SettingsDraftProvider><Outlet /></SettingsDraftProvider>
+      </Stack>
     </main>
     <Modal opened={closing} onClose={() => setClosing(false)} title="Exit the application?" centered>
       <Stack>

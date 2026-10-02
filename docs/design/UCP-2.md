@@ -4,7 +4,7 @@
 
 | 役割 | 責務 | 実装パス（段階4完了時に記入） |
 | --- | --- | --- |
-| 設定区画 | 保存済みの取得元と表示先・選択肢を表示し、入力を保存まで画面上に保持する。Hub 選択時だけ接続先の入力を表示し、認証トークンは入力だけを受けて表示しない | `frontend/src/usecases/configure-hub/ConfigureHub.tsx` |
+| 設定区画 | 保存済みの取得元と表示先・選択肢を表示し、入力を保存まで画面上に保持し、画面ごとの `Save` でその画面の項目だけを保存する。Hub 選択時だけ接続先の入力を表示し、認証トークンは入力だけを受けて表示しない | `frontend/src/usecases/configure-hub/ConfigureHub.tsx` |
 | 機能アクセス | 本体の設定サービスを呼び出し、取得結果と保存結果を画面の状態へ反映する | `frontend/src/features/settings/queries.ts` |
 | 設定サービス | 取得元と表示先を検証して設定ファイルを置き換える。Hub 選択時は接続先 URL と認証トークンを1組で DPAPI により暗号化し、画面へは認証トークンの設定有無だけを返す。保存後に取得元の再評価を通知する | `internal/settings/service.go`、`internal/settings/dpapi_windows.go` |
 | 取得元切替 | 保存済みの取得元を読み、従前の取得処理を停止して選択した取得処理を起動する。ローカル取得は同梱の tokscale の結果を表示用の最新状態へ変換する | `main.go`、`internal/localusage/reader.go`、`internal/hub/receiver.go` |
@@ -25,7 +25,7 @@ sequenceDiagram
   S->>T: 接続中の機器を列挙
   T-->>S: 識別子と表示名
   S-->>UI: 取得元、接続先 URL、トークンの設定有無、表示先の選択と選択肢
-  User->>UI: Local と表示先を選択・Save
+  User->>UI: Connection 画面で Local を選択・Save
   UI->>Q: 保存
   Q->>S: Save
   S->>S: 検証、設定ファイルの置き換え

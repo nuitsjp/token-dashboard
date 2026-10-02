@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Stack } from '@mantine/core';
+import { Stack, Title } from '@mantine/core';
 import { UsagePreview } from '../usecases/show-usage/UsagePreview';
-import { ConfigureHub } from '../usecases/configure-hub/ConfigureHub';
-import { UpdateApp } from '../usecases/update-app/UpdateApp';
-export const Route = createFileRoute('/')({ component: () => <Stack gap="md"><UpdateApp /><UsagePreview /><ConfigureHub /></Stack> });
+import { DisplaySettings } from '../usecases/configure-hub/ConfigureHub';
+export const Route = createFileRoute('/')({ component: () => <Stack gap="md"><Title order={2}>Display settings</Title><UsagePreview /><DisplaySettings /></Stack> });
