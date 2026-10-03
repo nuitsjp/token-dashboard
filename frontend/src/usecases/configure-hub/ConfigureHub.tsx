@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { automatic, useSettingsDraft } from './SettingsDraft';
 import styles from './ConfigureHub.module.css';
@@ -70,12 +70,12 @@ export function DisplaySettings() {
     { value: automatic, label: 'Automatic' },
     ...displays.map(d => ({ value: d.deviceID, label: d.connected ? d.name : `${d.name} (Disconnected)` })),
   ];
-  return <Card withBorder padding="sm">
+  return <Stack gap={4} align="flex-end">
     <Group wrap="nowrap" gap="sm">
       <Title order={5}>Output</Title>
-      <Select flex={1} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
+      <Select w={280} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
         onChange={value => { if (value) draft.setDisplay(value); }} />
     </Group>
-    {displays.length === 0 && <Text size="xs" c="dimmed" mt="xs">No TURZX display is connected.</Text>}
-  </Card>;
+    {displays.length === 0 && <Text size="xs" c="dimmed">No TURZX display is connected.</Text>}
+  </Stack>;
 }

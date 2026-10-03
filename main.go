@@ -126,7 +126,9 @@ func run() error {
 		return err
 	}
 	usageState := usage.NewState()
-	displayService := &display.Service{}
+	displayService := &display.Service{State: usageState, Logger: logger,
+		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
+		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()

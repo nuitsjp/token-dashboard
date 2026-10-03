@@ -9,6 +9,7 @@
 | 最新状態 | 受信した利用状況をメモリにだけ保持し、置き換えを描画へ通知する | `internal/usage/usage.go` |
 | 描画 | 最新状態の置き換え・保存済みの表示スタイルの変更・1分ごとの時刻で、利用状況から 1920×462 の表示画像を游ゴシックで描く（Go 標準の `image` と `golang.org/x/image`）。利用枠は表示スタイルが `Gauges`（既定）なら円弧のゲージ（上端に Tokens を横に並べる）、`Bars` なら横棒（左端に Tokens を縦に並べる）で描き、色は同じ規則（ペースと残量の悪い方）で決める。提供元のアイコンはアプリに同梱する | `internal/display/render.go`、`internal/display/gauges.go`、`internal/display/style.go`、`internal/display/icons/` |
 | TURZX 送信 | 表示画像を90度回転して JPEG にし、表示先の TURZX へ逐次送る。送信中に届いた画像は最新の1枚だけ残す。再接続時に最新の画像を送る。アプリの終了時に再起動コマンドを送る | `internal/display/output.go`、`internal/turzx/protocol.go`、`internal/turzx/conn_windows.go` |
+| 利用枠の選択 | `Display` 画面の `Usage Limits` で、契約と枠の表示・非表示を選ぶ。表示しない枠の識別子を設定ファイルの `hiddenLimits` に保存し、保存のたびに描画へ再生成を求める。描画は、最新状態から表示しない枠を取り除いたものに、契約の選び方・並び順の規則を適用する。保存に失敗したときは、選択も表示画像も変えずにエラーを返す。保存済みの選択を読めないときは、すべての枠を描く | `internal/display/limits.go`、`internal/display/service.go`、`internal/settings/service.go`、`frontend/src/usecases/show-usage/UsageLimitSelect.tsx`、`frontend/src/features/display/queries.ts` |
 | プレビュー配信 | 本体の Wails サービス。最新の表示画像を画面へ返し、画像の更新をイベントで通知する | `internal/display/service.go` |
 | プレビュー区画 | ウィンドウで最新の表示画像を表示する。画像を描かず、状態も持たない | `frontend/src/usecases/show-usage/UsagePreview.tsx`、`frontend/src/features/display/queries.ts` |
 
