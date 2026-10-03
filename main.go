@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
 
@@ -194,8 +195,14 @@ func run() error {
 			window.Restore()
 			window.Focus()
 		}
+		if slices.Contains(os.Args[1:], "--show") {
+			// The installer's launch option: show the window once, for the first use.
+			app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+				application.InvokeSync(show)
+			})
+		}
 		menu := application.NewMenu()
-		update := menu.Add("").SetHidden(true)
+		update :=menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {

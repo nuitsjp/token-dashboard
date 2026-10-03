@@ -18,6 +18,9 @@ VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "ProductVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "MIT"
 !define MUI_ABORTWARNING
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_TEXT "${APP_NAME}を起動して画面を表示する"
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchApp
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -134,6 +137,11 @@ failed:
   Abort
 done:
 SectionEnd
+
+Function LaunchApp
+  ; The app shows its window once, for the first use.
+  Exec '"$INSTDIR\${APP_EXE}" --show'
+FunctionEnd
 
 Function .onInstSuccess
   ${If} $Restart == "1"
