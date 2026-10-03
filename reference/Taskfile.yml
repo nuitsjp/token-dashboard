@@ -6,9 +6,17 @@ vars:
 
 tasks:
   generate:
+    # verify の中で build:server からも呼ばれるため、1回の実行では1度だけ生成する。
+    run: once
     cmds:
       - wails3 generate bindings -ts -i -names -f '-tags=server' -d frontend/bindings .
       - npm --prefix frontend run routes
+  # デスクトップ版と検証用サーバーは同じ画面を埋め込むため、1回の実行では1度だけビルドする。
+  frontend:build:
+    run: once
+    cmds:
+      - task: generate
+      - npm --prefix frontend run build
   frontend:dev:
     dir: frontend
     cmds: [npm run dev]
@@ -21,13 +29,11 @@ tasks:
     cmds: [node scripts/build.mjs run]
   build:
     cmds:
-      - task: generate
-      - npm --prefix frontend run build
+      - task: frontend:build
       - node scripts/build.mjs desktop
   build:server:
     cmds:
-      - task: generate
-      - npm --prefix frontend run build
+      - task: frontend:build
       - node scripts/build.mjs server
   server:
     cmds:
@@ -36,13 +42,16 @@ tasks:
   package:
     cmds:
       - task: build
-      - node scripts/build.mjs package
+      - task: package:prepared
+  # bin/ のデスクトップ版からインストーラーだけを作る。
+  package:prepared:
+    cmds: [node scripts/build.mjs package]
   test:core:
     cmds: [go test ./internal/... ./cmd/release/...]
+  # 型検査は検証用サーバーの画面ビルドに含まれる。
   verify:
     cmds:
       - task: generate
-      - npm --prefix frontend run typecheck
       - npm --prefix frontend run lint
       - npm --prefix frontend run test
       - go test ./internal/... ./cmd/release/...
@@ -51,3 +60,7 @@ tasks:
       - python {{.DOC_CHECK}} .
       - task: build:server
       - npm --prefix frontend run test:e2e
+  ci:
+    cmds:
+      - task: verify
+      - task: build

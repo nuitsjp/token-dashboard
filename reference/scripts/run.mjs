@@ -43,7 +43,7 @@ try {
       run(cli, ['dev'], root, { WAILS_FRONTEND_MODE: command === 'dev:mock' ? 'mock' : 'real' });
     } else if (command === 'release') {
       run('go', ['run', './cmd/release', ...args]);
-    } else if (['build', 'package', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
+    } else if (['build', 'package', 'package:prepared', 'ci', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
       run(cli, ['task', command]);
     } else throw new Error(`Unknown command: ${command}`);
   }

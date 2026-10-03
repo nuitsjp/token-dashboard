@@ -22,17 +22,21 @@ tasks:
       - task: generate
       - npm --prefix frontend run build:dev
       - node scripts/build.mjs desktop-dev
+  # デスクトップ版と検証用サーバーは同じ画面を埋め込むため、1回の実行では1度だけビルドする。
+  frontend:build:
+    run: once
+    cmds:
+      - task: generate
+      - npm --prefix frontend run build
   run:
     cmds: [node scripts/build.mjs run]
   build:
     cmds:
-      - task: generate
-      - npm --prefix frontend run build
+      - task: frontend:build
       - node scripts/build.mjs desktop
   build:server:
     cmds:
-      - task: generate
-      - npm --prefix frontend run build
+      - task: frontend:build
       - node scripts/build.mjs server
   server:
     cmds:
@@ -41,13 +45,16 @@ tasks:
   package:
     cmds:
       - task: build
-      - node scripts/build.mjs package
+      - task: package:prepared
+  # bin/ のデスクトップ版からインストーラーだけを作る。
+  package:prepared:
+    cmds: [node scripts/build.mjs package]
   test:core:
     cmds: [go test ./internal/... ./cmd/release/...]
   # 画面の検査と検証用サーバーのビルドは frontend/ を書き換えるため、この順に1本で実行する。
+  # 型検査は検証用サーバーの画面ビルドに含まれる。
   check:frontend:
     cmds:
-      - npm --prefix frontend run typecheck
       - npm --prefix frontend run lint
       - npm --prefix frontend run test
       - task: build:server
@@ -68,3 +75,8 @@ tasks:
       - task: generate
       - task: checks
       - npm --prefix frontend run test:e2e
+  # E2E は bin/tokscale.exe を使うため、デスクトップ版のビルドは E2E の後に行う。
+  ci:
+    cmds:
+      - task: verify
+      - task: build
