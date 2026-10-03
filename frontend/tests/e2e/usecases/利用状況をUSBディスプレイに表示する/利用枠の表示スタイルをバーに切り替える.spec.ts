@@ -11,7 +11,7 @@ import { shortIntervals } from '../../support/local';
 // checked by the colours at fixed points of the 1920x462 layout.
 const background = [15, 17, 23];
 const line = [42, 47, 58]; // the divider and the empty part of a bar
-const normal = [144, 133, 233]; // violet
+const normal = [116, 102, 224]; // violet
 const danger = [240, 97, 109];
 const caution = [250, 178, 25];
 const points = {

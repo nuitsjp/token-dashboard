@@ -184,7 +184,7 @@ func run() error {
 		// The app lives in the task tray. Closing the window only hides it.
 		// The title bar is the only place that shows the name and version.
 		title := cfg.Name + " v" + cfg.Version
-		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: title, Width: 1160, Height: 800, URL: "/", Hidden: true,
+		window = app.Window.NewWithOptions(application.WebviewWindowOptions{Title: title, Width: 1330, Height: 880, URL: "/", Hidden: true,
 			Windows: application.WindowsWindow{Theme: application.Dark}})
 		window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 			e.Cancel()

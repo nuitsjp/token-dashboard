@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
   user["[Person] 利用者"]
-  system["[System] token-monitor-turzx"]
+  system["[System] Token Dashboard"]
   local["[External] この端末のAIツール利用記録と利用枠API"]
   hub["[External] Token Monitor Hub"]
   turzx["[External] TURZX 9.2インチ USBディスプレイ"]

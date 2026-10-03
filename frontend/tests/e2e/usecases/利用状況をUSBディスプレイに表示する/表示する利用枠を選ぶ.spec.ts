@@ -10,7 +10,7 @@ import { shortIntervals } from '../../support/local';
 // the window and stopping the process for Exit. The image is checked by counting pixels of the
 // colours that the gauge rules give each window.
 const background = [15, 17, 23];
-const normal = [144, 133, 233]; // violet
+const normal = [116, 102, 224]; // violet
 const danger = [240, 97, 109];
 const caution = [250, 178, 25];
 // A drawn arc or bar has far more exact pixels than this; the edges are blended.

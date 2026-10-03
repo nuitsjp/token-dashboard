@@ -10,7 +10,6 @@ import { UpdateApp } from '../usecases/update-app/UpdateApp';
 import styles from './Shell.module.css';
 
 const icon = (path: string) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={path} /></svg>;
-const logo = icon('M4 18V9M10 18V5M16 18v-7M22 18H2');
 
 function Content() {
   const info = useQuery(appInfo());
@@ -26,13 +25,12 @@ function Content() {
   async function close() { try { await confirmQuit(); } catch (failure) { setError(failure); } }
   return <div className={styles.shell}>
     <nav className={styles.side} aria-label="Menu">
-      <div className={styles.brand}><span className={styles.logo}>{logo}</span><Text fw={700} lh={1.2}>Token Monitor<br />TURZX</Text></div>
       <NavLink component={Link} to="/" label="Display" leftSection={icon('M3 4h18v12H3zM8 20h8M12 16v4')} activeOptions={{ exact: true }} />
       <NavLink component={Link} to="/connection" label="Connection" leftSection={icon('M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01')} />
       <Text size="xs" c="dimmed" className={styles.version}>{info.data ? `Version ${info.data.version}` : ''}</Text>
     </nav>
     <main className={styles.main}>
-      <Stack gap="md">
+      <Stack gap="md" className={styles.page}>
         <UpdateApp />
         <ErrorNotice error={info.error || error} />
         {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}

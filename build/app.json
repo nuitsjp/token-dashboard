@@ -1,6 +1,6 @@
 {
   "id": "io.github.nuitsjp.token-monitor-turzx",
-  "name": "Token Monitor TURZX",
+  "name": "Token Dashboard",
   "executable": "token-monitor-turzx.exe",
   "version": "0.1.0",
   "updateSource": "https://github.com/nuitsjp/token-monitor-turzx/releases/latest/download/update.json",

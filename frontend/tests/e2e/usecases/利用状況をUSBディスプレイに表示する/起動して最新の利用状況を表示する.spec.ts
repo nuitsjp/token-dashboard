@@ -13,7 +13,7 @@ import { shortIntervals } from '../../support/local';
 type Rgb = readonly [number, number, number];
 const background: Rgb = [15, 17, 23];
 const panelFill: Rgb = [21, 24, 33];
-const normal: Rgb = [144, 133, 233]; // violet
+const normal: Rgb = [116, 102, 224]; // violet
 const danger: Rgb = [240, 97, 109];
 const caution: Rgb = [250, 178, 25];
 // [left, top, right, bottom] of the first panel (one circle) and of the second panel of ranked().
