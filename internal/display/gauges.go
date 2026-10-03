@@ -30,13 +30,11 @@ var (
 )
 
 const (
-	// The mock data shows seven circles at this width; the eighth does not fit.
 	cellWidth  = 240
 	cellGap    = 12
 	panelTop   = 30
 	panelGap   = 14
 	gaugesLeft = 40
-	panelRight = 40
 	panelPad   = 10
 	// Today, Month and All run across the top; the panels keep the same margin above and below.
 	tokenStrip = 56
@@ -197,17 +195,27 @@ func panels(limits usage.Limits) []panel {
 
 func (p panel) width() int { return len(p.circles)*cellWidth + (len(p.circles)-1)*cellGap + 2*panelPad }
 
-// gauges draws the panels from the left margin to the right on one row. A panel that does not fit,
-// and every one after it, is not shown.
+// gauges keeps the default margins unless reducing them fits more whole contracts.
+// A panel that does not fit even without margins, and every one after it, is not shown.
 func (r *Renderer) gauges(img *image.RGBA, stats *usage.Stats, now time.Time) {
 	r.tokenStrip(img, stats.Periods)
 	top := panelTop + tokenStrip
 	height := Height - top - panelTop
-	x := gaugesLeft
-	for _, p := range panels(stats.Limits) {
-		if x+p.width() > Width-panelRight {
-			return
+	ps := panels(stats.Limits)
+	width, count := 0, 0
+	for _, p := range ps {
+		next := width + p.width()
+		if count > 0 {
+			next += panelGap
 		}
+		if next > Width {
+			break
+		}
+		width = next
+		count++
+	}
+	x := min(gaugesLeft, (Width-width)/2)
+	for _, p := range ps[:count] {
 		r.panel(img, p, x, top, height, now)
 		x += p.width() + panelGap
 	}
