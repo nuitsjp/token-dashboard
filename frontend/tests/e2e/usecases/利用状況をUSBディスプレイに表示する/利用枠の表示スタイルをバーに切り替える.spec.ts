@@ -141,10 +141,13 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
     let gauges = '';
     let requests = 0;
     await test.step('手順1', async () => {
-      // The Style card (the style choice and the preview) comes before Output.
+      // Output sits at the right end of the row of the page heading, above the Style card.
+      const title = await page.getByRole('heading', { name: 'Display settings' }).boundingBox();
       const style1 = await page.getByRole('heading', { name: 'Style' }).boundingBox();
       const output1 = await page.getByRole('heading', { name: 'Output' }).boundingBox();
-      expect(style1!.y).toBeLessThan(output1!.y);
+      expect(Math.abs(output1!.y - title!.y)).toBeLessThan(title!.height);
+      expect(output1!.x).toBeGreaterThan(title!.x + title!.width);
+      expect(output1!.y).toBeLessThan(style1!.y);
       await expect(style()).toHaveValue('Gauges');
       await expect.poll(async () => (await preview(page)).length).toBeGreaterThan(5000);
       gauges = await preview(page);

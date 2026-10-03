@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -56,6 +57,8 @@ type file struct {
 	DisplayName string `json:"displayName"`
 	// LimitStyle is Gauges or Bars; absent means Gauges.
 	LimitStyle string `json:"limitStyle,omitempty"`
+	// HiddenLimits are the keys of the windows that are not drawn; absent means all are drawn.
+	HiddenLimits []string `json:"hiddenLimits,omitempty"`
 }
 
 type connection struct {
@@ -139,7 +142,7 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
 	if req.LimitStyle != "" {
 		next.LimitStyle = req.LimitStyle
 	}
@@ -281,6 +284,39 @@ func LimitStyle(s *Service) string {
 		return "Gauges"
 	}
 	return styleOf(saved)
+}
+
+// HiddenLimits returns the saved keys of the windows that are not drawn. It is a function, not a
+// method, so Wails does not bind it.
+func HiddenLimits(s *Service) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	return saved.HiddenLimits, err
+}
+
+// SetLimitsShown shows or hides the windows with the given keys. The other saved values, including the
+// other windows, keep their state. It is a function, not a method, so Wails does not bind it.
+func SetLimitsShown(s *Service, keys []string, shown bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return err
+	}
+	hidden := map[string]bool{}
+	for _, k := range saved.HiddenLimits {
+		hidden[k] = true
+	}
+	for _, k := range keys {
+		if shown {
+			delete(hidden, k)
+		} else {
+			hidden[k] = true
+		}
+	}
+	saved.HiddenLimits = slices.Sorted(maps.Keys(hidden))
+	return s.write(saved)
 }
 
 // DisplayTarget returns the saved display, or the first connected one when Automatic ("" if none).
