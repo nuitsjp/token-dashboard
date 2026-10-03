@@ -1,0 +1,20 @@
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--mantine-color-dark-7); border: 1px solid var(--mantine-color-dark-4); border-radius: 10px; padding: 12px; transition: opacity .15s; }
+.card[data-state='none'] { opacity: .55; }
+.head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.title { flex: 1; min-width: 0; line-height: 1.25; }
+.switch { position: relative; flex: none; width: 38px; height: 22px; border: 0; border-radius: 99px; background: var(--mantine-color-dark-3); cursor: pointer; transition: background .15s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.switch[aria-checked='true'] { background: var(--mantine-color-violet-5); }
+.switch[aria-checked='true']::after { left: 19px; }
+.switch[aria-checked='mixed'] { background: var(--mantine-color-violet-8); }
+.switch[aria-checked='mixed']::after { left: 11px; }
+.chips { display: flex; flex-direction: column; gap: 6px; }
+.chip { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; text-align: left; color: inherit; font: inherit; cursor: pointer; background: transparent; border: 1px solid var(--mantine-color-dark-4); border-radius: 8px; padding: 6px 10px; transition: border-color .15s, background .15s; }
+.chip[aria-checked='true'] { border-color: var(--mantine-color-violet-5); background: color-mix(in srgb, var(--mantine-color-violet-5) 12%, transparent); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mantine-color-dark-4); }
+.chip[aria-checked='true'] .dot { background: var(--mantine-color-violet-5); }
+.track { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--mantine-color-dark-4); overflow: hidden; }
+.fill { display: block; height: 100%; background: #9085e9; }
+.fill[data-level='warn'] { background: #fab219; }
+.fill[data-level='bad'] { background: #f0616d; }
