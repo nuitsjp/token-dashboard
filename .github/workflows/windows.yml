@@ -7,12 +7,67 @@ on:
 permissions:
   contents: read
 jobs:
+  # Only the applications whose files changed are checked. reference/ also uses the files in shared_paths.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.paths.outputs.matrix }}
+      changed: ${{ steps.paths.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select changed applications
+        id: paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          if os.environ['EVENT_NAME'] == 'workflow_dispatch':
+              directories = ['.', 'reference']
+          else:
+              base = os.environ['BASE_SHA']
+              head = os.environ['HEAD_SHA']
+              if base == '0' * 40:
+                  command = ['git', 'ls-tree', '-r', '--name-only', '-z', head]
+              elif os.environ['EVENT_NAME'] == 'pull_request':
+                  command = ['git', 'diff', '--name-only', '--no-renames', '-z', f'{base}...{head}']
+              else:
+                  command = ['git', 'diff', '--name-only', '--no-renames', '-z', base, head]
+              paths = subprocess.check_output(command).decode('utf-8').split('\0')
+              paths = [path for path in paths if path]
+              shared_paths = {
+                  '.github/workflows/windows.yml',
+                  'scripts/doc_check.py',
+                  'docs/document-policy.md',
+                  'docs/standards/mock-driven-development.md',
+                  'LICENSE',
+              }
+              shared = any(path in shared_paths for path in paths)
+              directories = []
+              if shared or any(not path.startswith('reference/') for path in paths):
+                  directories.append('.')
+              if shared or any(path.startswith('reference/') for path in paths):
+                  directories.append('reference')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'matrix={json.dumps({"directory": directories})}\n')
+              output.write(f'changed={str(bool(directories)).lower()}\n')
+          print(f'Selected applications: {directories}')
+          PY
   build:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        directory: [., reference]
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     runs-on: windows-latest
+    timeout-minutes: 30
     env:
       # The D: drive of the runner is much faster than C:, where restoring the Go cache took 55 seconds.
       GOCACHE: D:\go\cache
@@ -53,15 +108,22 @@ jobs:
       - name: Browser
         working-directory: ${{ matrix.directory }}/frontend
         run: npx playwright install --only-shell chromium
-      - name: Verify
-        run: node scripts/run.mjs verify
-      - name: Windows executable
-        run: node scripts/run.mjs build
+      # The desktop build reuses the frontend that verify built for the E2E server.
+      - name: Verify and build
+        run: node scripts/run.mjs ci
       - name: NSIS
         run: choco install nsis --yes --no-progress
       - name: Installer
-        run: node scripts/run.mjs package
+        run: node scripts/run.mjs package:prepared
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build-${{ matrix.directory == '.' && 'project' || 'reference' }}
           path: ${{ matrix.directory }}/bin/*-setup.exe
+      - name: Upload failed-test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-e2e-${{ matrix.directory == '.' && 'project' || 'reference' }}
+          path: ${{ matrix.directory }}/frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

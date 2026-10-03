@@ -80,7 +80,7 @@ try {
       run('npm', ['--prefix', 'frontend', 'run', 'test:e2e', '--', '--grep', '@desktop'], root, { DESKTOP_E2E: '1' });
     } else if (command === 'release') {
       run('go', ['run', './cmd/release', ...args]);
-    } else if (['build', 'package', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
+    } else if (['build', 'package', 'package:prepared', 'ci', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
       run(cli, ['task', command]);
     } else throw new Error(`Unknown command: ${command}`);
   }
