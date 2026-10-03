@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     resolve: { alias: [
       { find: '@bindings', replacement: fileURLToPath(new URL('./bindings', import.meta.url)) },
     ] },
-    server: { host: '127.0.0.1', port: Number(process.env.WAILS_VITE_PORT) || 9245, strictPort: true },
+    server: { host: '127.0.0.1', port: Number(process.env.WAILS_VITE_PORT) || 9345, strictPort: true },
     build: { target: 'es2022', sourcemap: false },
   };
 });

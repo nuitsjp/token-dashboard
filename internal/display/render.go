@@ -33,15 +33,13 @@ var (
 	dim        = color.RGBA{0x8a, 0x90, 0xa0, 0xff}
 	accent     = color.RGBA{0x7c, 0xc4, 0xff, 0xff}
 	track      = color.RGBA{0x2a, 0x2f, 0x3a, 0xff}
-	good       = color.RGBA{0x4a, 0xde, 0x80, 0xff}
-	warn       = color.RGBA{0xfb, 0xbf, 0x24, 0xff}
-	bad        = color.RGBA{0xf8, 0x71, 0x71, 0xff}
 )
 
 // Renderer draws with Yu Gothic from the Windows font folder. It is not safe for concurrent use.
 type Renderer struct {
 	medium, bold *opentype.Font
 	faces        map[faceKey]font.Face
+	icons        map[string]image.Image
 }
 
 type faceKey struct {
@@ -59,7 +57,7 @@ func NewRenderer() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Renderer{medium: medium, bold: bold, faces: map[faceKey]font.Face{}}, nil
+	return &Renderer{medium: medium, bold: bold, faces: map[faceKey]font.Face{}, icons: loadIcons()}, nil
 }
 
 // loadFont returns the first face of a collection: Yu Gothic Medium or Bold.
@@ -76,7 +74,7 @@ func loadFont(path string) (*opentype.Font, error) {
 }
 
 // Render draws stats as of now. Nil stats means the selected source has no data yet.
-func (r *Renderer) Render(stats *usage.Stats, now time.Time, source string) *image.RGBA {
+func (r *Renderer) Render(stats *usage.Stats, now time.Time, source string, style Style) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, Width, Height))
 	draw.Draw(img, img.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
 	if stats == nil {
@@ -88,8 +86,13 @@ func (r *Renderer) Render(stats *usage.Stats, now time.Time, source string) *ima
 		r.text(img, face, dim, (Width-measure(face, label))/2, Height/2+22, label)
 		return img
 	}
-	r.tokens(img, stats.Periods)
-	r.limits(img, stats.Limits, now)
+	// Gauges use the whole width for Usage Limits and leave Tokens out.
+	if style == Bars {
+		r.tokens(img, stats.Periods)
+		r.limits(img, stats.Limits, now)
+	} else {
+		r.gauges(img, stats, now)
+	}
 	return img
 }
 
@@ -240,7 +243,7 @@ func (r *Renderer) bars(img *image.RGBA, g group, x, y int, now time.Time) {
 		fill(img, image.Rect(x, base+12, x+columnWidth, base+26), track)
 		if w.RemainingPercent != nil {
 			v := min(max(*w.RemainingPercent, 0), 100)
-			fill(img, image.Rect(x, base+12, x+int(float64(columnWidth)*v/100), base+26), meterColor(v))
+			fill(img, image.Rect(x, base+12, x+int(float64(columnWidth)*v/100), base+26), gaugeColor(w, now))
 		}
 	}
 }
@@ -283,17 +286,6 @@ func truncate(face font.Face, s string, width int) string {
 
 func fill(img *image.RGBA, rect image.Rectangle, c color.Color) {
 	draw.Draw(img, rect, image.NewUniform(c), image.Point{}, draw.Src)
-}
-
-func meterColor(remaining float64) color.Color {
-	switch {
-	case remaining < 20:
-		return bad
-	case remaining < 50:
-		return warn
-	default:
-		return good
-	}
 }
 
 func usd(v float64) string {

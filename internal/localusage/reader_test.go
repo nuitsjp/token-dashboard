@@ -2,6 +2,7 @@ package localusage
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -94,5 +95,28 @@ func TestCountAgainJustAfterMidnight(t *testing.T) {
 		if got := tc.now.Add(untilMidnight(tc.now)); !got.Equal(tc.want) {
 			t.Fatalf("after %v, count again at %v, want %v", tc.now, got, tc.want)
 		}
+	}
+}
+
+func TestMergeLimitsKeepsProvidersThatTheReadLacks(t *testing.T) {
+	percent := func(v float64) *float64 { return &v }
+	claude := usage.Provider{Provider: "Claude", Windows: []usage.Window{{Kind: "session", ShowMeter: true, RemainingPercent: percent(83)}}}
+	codex := usage.Provider{Provider: "Codex", Windows: []usage.Window{{Kind: "weekly", ShowMeter: true, RemainingPercent: percent(95)}}}
+	first := usage.Limits{Providers: []usage.Provider{claude, codex}}
+	if got := mergeLimits(nil, first); !reflect.DeepEqual(got, first) {
+		t.Fatalf("first read = %+v", got)
+	}
+	// A read that skips Claude, for example by its rate limit, keeps Claude's last values.
+	skipped := usage.Limits{Providers: []usage.Provider{{Provider: "Codex", Windows: []usage.Window{{Kind: "weekly", ShowMeter: true, RemainingPercent: percent(94)}}}}}
+	kept := mergeLimits(&first, skipped)
+	if len(kept.Providers) != 2 || kept.Providers[0].Provider != "Codex" || *kept.Providers[0].Windows[0].RemainingPercent != 94 ||
+		kept.Providers[1].Provider != "Claude" || *kept.Providers[1].Windows[0].RemainingPercent != 83 {
+		t.Fatalf("after a skipped provider = %+v", kept)
+	}
+	// When Claude is read again, its new values replace the kept ones.
+	back := usage.Limits{Providers: []usage.Provider{{Provider: "Claude", Windows: []usage.Window{{Kind: "session", ShowMeter: true, RemainingPercent: percent(80)}}}, skipped.Providers[0]}}
+	again := mergeLimits(&kept, back)
+	if len(again.Providers) != 2 || *again.Providers[0].Windows[0].RemainingPercent != 80 {
+		t.Fatalf("after the provider returned = %+v", again)
 	}
 }

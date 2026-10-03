@@ -23,14 +23,17 @@ type Intervals struct {
 	Settle time.Duration
 	// Graph is the least time between the starts of two graph runs.
 	Graph time.Duration
-	// Poll is the period of usage limits and Cursor syncs.
+	// Poll is the period of Cursor syncs and the wait before a failed graph runs again.
 	Poll time.Duration
+	// Limits is the period of usage limits, and the least time between two reads of them. The
+	// providers rate-limit these reads, so changes of the logs do not read them.
+	Limits time.Duration
 	// MaxSyncDelay caps the growing wait after Cursor sync failures.
 	MaxSyncDelay time.Duration
 }
 
 // DefaultIntervals are the intervals of the app.
-var DefaultIntervals = Intervals{Settle: 2 * time.Second, Graph: 10 * time.Second, Poll: 45 * time.Second, MaxSyncDelay: 10 * time.Minute}
+var DefaultIntervals = Intervals{Settle: 2 * time.Second, Graph: 10 * time.Second, Poll: 45 * time.Second, Limits: 2 * time.Minute, MaxSyncDelay: 10 * time.Minute}
 
 // Reader keeps the state current with usage from a local tokscale executable.
 type Reader struct {
@@ -101,11 +104,8 @@ type loop struct {
 	scanWanted  bool
 	syncWanted  bool
 	graphWanted bool
-	// withLimits reads the usage limits when the queued graph starts,
-	// so that changes read the limits no more often than the graph.
-	withLimits bool
-	lastGraph  time.Time
-	graphReady <-chan time.Time
+	lastGraph   time.Time
+	graphReady  <-chan time.Time
 
 	usageRunning bool
 	usageWanted  bool
@@ -154,7 +154,7 @@ func (r *Reader) Run(ctx context.Context) {
 			}
 		case <-settle:
 			settle = nil
-			l.graphWanted, l.withLimits = true, true
+			l.graphWanted = true
 		case <-l.graphReady:
 			l.graphReady = nil
 		case <-graphRetry:
@@ -185,7 +185,8 @@ func (r *Reader) Run(ctx context.Context) {
 				if res.err != nil {
 					r.logger.Warn("local_usage_limits_failed", "cause", res.err)
 				} else {
-					l.limits = &res.limits
+					merged := mergeLimits(l.limits, res.limits)
+					l.limits = &merged
 					l.publish()
 				}
 				if l.usageWanted {
@@ -211,6 +212,27 @@ func (r *Reader) Run(ctx context.Context) {
 	}
 }
 
+// mergeLimits adds to next the providers that the previous read had and next lacks, so that a
+// provider whose limits were skipped, for example by its rate limit, stays on the display with its
+// last values.
+func mergeLimits(previous *usage.Limits, next usage.Limits) usage.Limits {
+	if previous == nil {
+		return next
+	}
+	key := func(p usage.Provider) string { return p.Provider + "\x00" + p.AccountLabel }
+	have := map[string]bool{}
+	for _, p := range next.Providers {
+		have[key(p)] = true
+	}
+	merged := usage.Limits{Providers: append([]usage.Provider(nil), next.Providers...)}
+	for _, p := range previous.Providers {
+		if !have[key(p)] {
+			merged.Providers = append(merged.Providers, p)
+		}
+	}
+	return merged
+}
+
 // requestUsage starts reading usage limits, or queues one read while another runs.
 // The next periodic read counts from this start.
 func (l *loop) requestUsage() {
@@ -219,7 +241,7 @@ func (l *loop) requestUsage() {
 		return
 	}
 	l.usageRunning = true
-	l.usageTick = time.After(l.r.intervals.Poll)
+	l.usageTick = time.After(l.r.intervals.Limits)
 	l.start(func(ctx context.Context) result {
 		limits, err := l.r.readLimits(ctx)
 		return result{job: usageJob, limits: limits, err: err}
@@ -258,10 +280,6 @@ func (l *loop) dispatch() {
 	}
 	l.graphWanted, l.busy = false, true
 	l.lastGraph = time.Now()
-	if l.withLimits {
-		l.withLimits = false
-		l.requestUsage()
-	}
 	l.start(func(ctx context.Context) result {
 		periods, clients, err := l.r.readPeriods(ctx)
 		return result{job: graphJob, periods: periods, clients: clients, err: err}
@@ -329,7 +347,7 @@ func (l *loop) handleSync(res result) {
 		}
 		l.syncDelay = l.r.intervals.Poll
 		l.syncTick = time.After(l.r.intervals.Poll)
-		l.graphWanted, l.withLimits = true, true
+		l.graphWanted = true
 	case cursorUnused:
 		// Cursor is not signed in. A restart checks again.
 		logger.Info("cursor_sync_disabled", "cause", res.err)

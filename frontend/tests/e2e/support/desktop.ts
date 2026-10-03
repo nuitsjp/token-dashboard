@@ -37,9 +37,12 @@ if (-not $win) { throw 'window not found' }
 $names = @()
 for ($i = 0; $i -lt 40; $i++) {
   $names = @($win.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-  if ($names -contains 'Save') { break }
+  if ($names -contains 'Style') { break }
   Start-Sleep -Milliseconds 500
 }
+# The window opens on Display. The saved connection is on the Connection page.
+$link = $win.FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Connection')))
+if ($link) { $link.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Milliseconds 1000 }
 $edit = $win.FindFirst('Descendants', (New-Object System.Windows.Automation.AndCondition(
   (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Hub URL')),
   (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))))

@@ -34,6 +34,8 @@ type View struct {
 	// DisplayID is empty when the first connected display is used automatically.
 	DisplayID string    `json:"displayID"`
 	Displays  []Display `json:"displays"`
+	// LimitStyle is how Usage Limits are drawn: Gauges or Bars.
+	LimitStyle string `json:"limitStyle"`
 }
 
 type SaveRequest struct {
@@ -42,6 +44,8 @@ type SaveRequest struct {
 	// An empty token keeps the saved one.
 	Token     string `json:"token"`
 	DisplayID string `json:"displayID"`
+	// An empty LimitStyle keeps the current one.
+	LimitStyle string `json:"limitStyle"`
 }
 
 // file is the on-disk format described in docs/design/data.md.
@@ -50,6 +54,8 @@ type file struct {
 	Connection  string `json:"connection,omitempty"`
 	DisplayID   string `json:"displayID"`
 	DisplayName string `json:"displayName"`
+	// LimitStyle is Gauges or Bars; absent means Gauges.
+	LimitStyle string `json:"limitStyle,omitempty"`
 }
 
 type connection struct {
@@ -65,6 +71,8 @@ type Service struct {
 	logger  *slog.Logger
 	// OnSaved hands the new settings to the processes that depend on them. It must not block.
 	OnSaved func()
+	// OnStyleSaved tells the display that the style changed. It must not block.
+	OnStyleSaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -86,6 +94,14 @@ func (s *Service) Get() (view View, err error) {
 	return viewOf(saved, conn, devices), nil
 }
 
+// styleOf is the saved style: Bars when saved so, otherwise Gauges.
+func styleOf(saved file) string {
+	if saved.LimitStyle == "Bars" {
+		return "Bars"
+	}
+	return "Gauges"
+}
+
 func (s *Service) Save(req SaveRequest) (view View, err error) {
 	defer func() { err = fault.Boundary(s.logger, "settings.save", err) }()
 	s.mu.Lock()
@@ -94,6 +110,7 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if err != nil {
 		return View{}, err
 	}
+	before := conn
 	devices, err := s.list()
 	if err != nil {
 		return View{}, err
@@ -119,7 +136,13 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 			fields["token"] = "The access token must not contain control characters."
 		}
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID}
+	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
+		fields["limitStyle"] = "Choose Gauges or Bars."
+	}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle}
+	if req.LimitStyle != "" {
+		next.LimitStyle = req.LimitStyle
+	}
 	if req.DisplayID != "" {
 		if i := slices.IndexFunc(devices, func(d turzx.Device) bool { return d.ID == req.DisplayID }); i >= 0 {
 			next.DisplayName = devices[i].Name
@@ -148,8 +171,13 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		return View{}, err
 	}
 	s.logger.Info("settings_saved")
-	if s.OnSaved != nil {
+	// The source is read again only when the source or the connection changed. A new display or style
+	// must not interrupt reading, which would blank the image until the next usage arrives.
+	if s.OnSaved != nil && (next.Source != saved.Source || (next.Source == "Hub" && conn != before)) {
 		s.OnSaved()
+	}
+	if styleOf(next) != styleOf(saved) && s.OnStyleSaved != nil {
+		s.OnStyleSaved()
 	}
 	return viewOf(next, conn, devices), nil
 }
@@ -230,7 +258,7 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 	if saved.DisplayID != "" && !slices.ContainsFunc(devices, func(d turzx.Device) bool { return d.ID == saved.DisplayID }) {
 		displays = append(displays, Display{DeviceID: saved.DisplayID, Name: saved.DisplayName})
 	}
-	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays}
+	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved)}
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -241,6 +269,18 @@ func parseOrigin(value string) (string, bool) {
 		return "", false
 	}
 	return u.Scheme + "://" + u.Host, true
+}
+
+// LimitStyle returns the saved style, Gauges when none is saved or the file cannot be read. It is a
+// function, not a method, so Wails does not bind it.
+func LimitStyle(s *Service) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return "Gauges"
+	}
+	return styleOf(saved)
 }
 
 // DisplayTarget returns the saved display, or the first connected one when Automatic ("" if none).

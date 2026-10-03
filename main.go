@@ -166,7 +166,8 @@ func run() error {
 		go output.Run(ctx)
 		sink = output.Submit
 	}
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), sink, emit, logger)
+	settingsService.OnStyleSaved = usageState.Touch
+	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -289,7 +290,7 @@ func shortIntervals() bool {
 // localIntervals are the waits of local reading.
 func localIntervals() localusage.Intervals {
 	if shortIntervals() {
-		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: time.Second, MaxSyncDelay: 4 * time.Second}
+		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: time.Second, Limits: time.Second, MaxSyncDelay: 4 * time.Second}
 	}
 	return localusage.DefaultIntervals
 }

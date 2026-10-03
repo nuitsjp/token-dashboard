@@ -87,7 +87,11 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       server = await startServer(dataDir, 34121, env);
       tokscale = watchTokscale(server.pid);
       await page.goto(server.url);
+      await page.getByRole('textbox', { name: 'Display style' }).click();
+      await page.getByRole('option', { name: 'Bars' }).click();
+      await page.getByRole('link', { name: 'Connection' }).click();
       await expect(page.getByRole('textbox', { name: 'Data source' })).toHaveValue('Local');
+      await page.getByRole('link', { name: 'Display' }).click();
       // Until both the tokens and the limits arrive, the image has no values and no divider.
       expect((await inspect(page)).divider).toEqual(background);
     });
@@ -129,6 +133,7 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
     });
 
     await test.step('手順6', async () => {
+      await page.getByRole('link', { name: 'Connection' }).click();
       const source = page.getByRole('textbox', { name: 'Data source' });
       await source.click();
       await page.getByRole('option', { name: 'Hub' }).click();
@@ -136,6 +141,7 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
       await page.getByLabel(/Access token/).fill('e2e-hub-token');
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByText('Saved.')).toBeVisible();
+      await page.getByRole('link', { name: 'Display' }).click();
       await expect.poll(() => tokscale!.running(), { timeout: 5_000 }).toBe(false);
       await expect.poll(() => hub.streams(), { timeout: 10_000 }).toBeGreaterThan(0);
       const stoppedAt = Date.now();

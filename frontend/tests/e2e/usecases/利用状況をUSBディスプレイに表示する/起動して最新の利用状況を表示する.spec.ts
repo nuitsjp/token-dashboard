@@ -8,24 +8,20 @@ import { shortIntervals } from '../../support/local';
 
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening
 // the window, closing it for hiding the window, and stopping the process for Exit. The image is
-// checked by the colours at fixed points of the 1920x462 layout.
-const background = [15, 17, 23];
-const line = [42, 47, 58]; // the divider and the empty part of a bar
-const green = [74, 222, 128];
-const red = [248, 113, 113];
-const yellow = [251, 191, 36];
-const points = {
-  divider: [356, 231], // between Tokens and Usage Limits
-  alphaBarStart: [389, 124], // lowest remaining, so the first contract of the first column
-  alphaBarMiddle: [560, 124],
-  betaBarStart: [389, 268], // the next contract, stacked under the first
-  betaBarEnd: [730, 268],
-  secondColumn: [800, 124],
-  firstColumnTop: [389, 124], // the first bar of each column's first contract
-  firstColumnSecond: [389, 268], // the first bar of a contract under a one-window contract
-  secondColumnTop: [770, 124],
-  fourthColumnTop: [1532, 124],
-} as const;
+// checked by the colours in areas of the 1920x462 layout: the arcs of the gauges are violet (normal),
+// yellow (caution) or red (danger), and the panels are a darker fill on the background.
+type Rgb = readonly [number, number, number];
+const background: Rgb = [15, 17, 23];
+const panelFill: Rgb = [21, 24, 33];
+const normal: Rgb = [144, 133, 233]; // violet
+const danger: Rgb = [240, 97, 109];
+const caution: Rgb = [250, 178, 25];
+// [left, top, right, bottom] of the first panel (one circle) and of the second panel of ranked().
+const firstPanel = [40, 86, 300, 432] as const;
+const secondPanel = [314, 86, 1102, 432] as const;
+const tokensStrip = [40, 30, 1880, 66] as const;
+const wholeImage = [0, 0, 1920, 462] as const;
+const panelRow = 90; // just below the top edge of the panels, where only the fill is
 
 const token = 'e2e-hub-token';
 // 4 seconds past the hour, so the shown minutes change 4 seconds after sending.
@@ -45,6 +41,7 @@ function stats(alphaRemaining: number) {
 }
 
 // Contracts in Hub order whose lowest remaining percents put them in a different order on screen.
+// Each window has its own label, so each gets its own circle.
 function ranked() {
   const contract = (provider: string, ...remaining: (number | null)[]) => ({
     provider, planLabel: 'Pro',
@@ -65,9 +62,9 @@ async function preview(page: Page) {
   return (await image.getAttribute('src')) ?? '';
 }
 
-// Returns the RGB colour of each point of the image in src.
-async function colours(page: Page, src: string) {
-  return page.evaluate(async ({ src, points }) => {
+// Counts the pixels of exactly the colour in the area, and the runs of that colour along one row.
+async function look(page: Page, src: string, area: readonly [number, number, number, number], rgb: Rgb, row = panelRow) {
+  return page.evaluate(async ({ src, area, rgb, row }) => {
     const img = new Image();
     img.src = src;
     await img.decode();
@@ -76,45 +73,25 @@ async function colours(page: Page, src: string) {
     canvas.height = img.naturalHeight;
     const context = canvas.getContext('2d')!;
     context.drawImage(img, 0, 0);
-    const result: Record<string, number[]> = { size: [img.naturalWidth, img.naturalHeight] };
-    for (const [name, [x, y]] of Object.entries(points)) result[name] = [...context.getImageData(x, y, 1, 1).data.slice(0, 3)];
-    return result;
-  }, { src, points });
+    const [left, top, right, bottom] = area;
+    const same = (d: Uint8ClampedArray, i: number) => d[i] === rgb[0] && d[i + 1] === rgb[1] && d[i + 2] === rgb[2];
+    const data = context.getImageData(left, top, right - left, bottom - top).data;
+    let count = 0;
+    for (let i = 0; i < data.length; i += 4) if (same(data, i)) count++;
+    const line = context.getImageData(0, row, img.naturalWidth, 1).data;
+    let runs = 0;
+    for (let x = 0; x < img.naturalWidth; x++) if (same(line, x * 4) && (x === 0 || !same(line, (x - 1) * 4))) runs++;
+    return { count, runs, size: [img.naturalWidth, img.naturalHeight] };
+  }, { src, area, rgb, row });
 }
 
-// The tokens of Today, Month and All, below each label and cost in the Tokens column.
-const tokenRows = { today: [0, 75, 350, 110], month: [0, 215, 350, 250], all: [0, 355, 350, 390] } as const;
-
-// Returns the leftmost and rightmost x of the pixels in each rect [left, top, right, bottom]
-// that differ from the background.
-async function extents(page: Page, src: string) {
-  return page.evaluate(async ({ src, rects }) => {
-    const img = new Image();
-    img.src = src;
-    await img.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const context = canvas.getContext('2d')!;
-    context.drawImage(img, 0, 0);
-    const result: Record<string, number[]> = {};
-    for (const [name, [left, top, right, bottom]] of Object.entries(rects)) {
-      const data = context.getImageData(left, top, right - left, bottom - top).data;
-      let min = Infinity;
-      let max = -Infinity;
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] === 15 && data[i + 1] === 17 && data[i + 2] === 23) continue;
-        const x = left + ((i / 4) % (right - left));
-        min = Math.min(min, x);
-        max = Math.max(max, x);
-      }
-      result[name] = [min, max];
-    }
-    return result;
-  }, { src, rects: tokenRows });
+// The number of pixels that differ from the background in the area.
+async function inked(page: Page, src: string, area: readonly [number, number, number, number]) {
+  const all = await look(page, src, area, background);
+  return (area[2] - area[0]) * (area[3] - area[1]) - all.count;
 }
 
-test('起動して、Hub の最新の利用状況をプレビューに表示し続ける', async ({ page, context }) => {
+test('起動して、Hub の最新の利用状況をゲージでプレビューに表示し続ける', async ({ page, context }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
   const hub = await startHub();
@@ -124,6 +101,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     await test.step('開始条件', async () => {
       // Precondition: the Hub connection is saved. Then the app starts as at sign-in.
       await page.goto(server.url);
+      await page.getByRole('link', { name: 'Connection' }).click();
       await page.getByRole('textbox', { name: 'Data source' }).click();
       await page.getByRole('option', { name: 'Hub' }).click();
       await page.getByLabel('Hub URL').fill(hub.url);
@@ -141,10 +119,11 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       expect(request.headers.authorization).toBe(`Bearer ${token}`);
       expect(request.headers['x-token-monitor-stream']).toBe('2');
       await page.goto(server.url);
-      const waiting = await colours(page, await preview(page));
-      // Waiting for Hub: no divider and no bars.
-      expect(waiting.divider).toEqual(background);
-      expect(waiting.alphaBarStart).toEqual(background);
+      const waiting = await preview(page);
+      // Waiting for Hub: no panel, no arc and no tokens.
+      expect((await look(page, waiting, wholeImage, panelFill)).runs).toBe(0);
+      expect((await look(page, waiting, wholeImage, normal)).count).toBe(0);
+      expect(await inked(page, waiting, tokensStrip)).toBe(0);
     });
     let first = '';
     await test.step('手順2', async () => {
@@ -152,12 +131,13 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       hub.send('snapshot', stats(12));
       await expect.poll(() => preview(page)).not.toBe(before);
       first = await preview(page);
-      const shown = await colours(page, first);
-      expect(shown.divider).toEqual(line);
-      expect(shown.alphaBarStart).toEqual(red);
-      expect(shown.alphaBarMiddle).toEqual(line);
-      expect(shown.betaBarStart).toEqual(green);
-      expect(shown.betaBarEnd).toEqual(line);
+      // Tokens run across the top. Below them, alpha (12% left, so danger) and beta (80%, normal)
+      // each have a panel; gamma has no meter and takes none.
+      expect(await inked(page, first, tokensStrip)).toBeGreaterThan(500);
+      expect((await look(page, first, wholeImage, panelFill)).runs).toBe(2);
+      expect((await look(page, first, firstPanel, danger)).count).toBeGreaterThan(100);
+      expect((await look(page, first, secondPanel, normal)).count).toBeGreaterThan(100);
+      expect((await look(page, first, secondPanel, danger)).count).toBe(0);
     });
     await test.step('手順3', async () => {
       await page.close();
@@ -167,8 +147,9 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     });
     await test.step('手順4', async () => {
       hub.send('stats', stats(60));
-      await expect.poll(async () => (await colours(page, await preview(page))).alphaBarMiddle).toEqual(green);
-      expect((await colours(page, await preview(page))).alphaBarStart).toEqual(green);
+      // 60% left of a window that is 40% over is on pace and above 40%: normal, so no danger remains.
+      await expect.poll(async () => (await look(page, await preview(page), firstPanel, danger)).count).toBe(0);
+      expect((await look(page, await preview(page), firstPanel, normal)).count).toBeGreaterThan(100);
     });
     await test.step('手順5', async () => {
       await page.close();
@@ -176,7 +157,7 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
       await expect.poll(() => hub.streams()).toBe(1);
       page = await context.newPage();
       await page.goto(server.url);
-      await expect.poll(async () => (await colours(page, await preview(page))).alphaBarStart).toEqual(red);
+      await expect.poll(async () => (await look(page, await preview(page), firstPanel, danger)).count).toBeGreaterThan(100);
     });
     await test.step('手順6', async () => {
       await server.stop();
@@ -186,33 +167,24 @@ test('起動して、Hub の最新の利用状況をプレビューに表示し�
     await test.step('受け入れ条件', async () => {
       await page.goto(server.url);
       // Nothing received is kept across a restart: the new process waits for the Hub again.
-      expect((await colours(page, await preview(page))).divider).toEqual(background);
+      expect((await look(page, await preview(page), wholeImage, panelFill)).runs).toBe(0);
       hub.send('snapshot', stats(12));
-      await expect.poll(async () => (await colours(page, await preview(page))).divider).toEqual(line);
+      await expect.poll(async () => (await look(page, await preview(page), wholeImage, panelFill)).runs).toBe(2);
       // Taken before the shown minutes change, to see the image drawn again after that.
       const current = await preview(page);
-      const shown = await colours(page, current);
-      expect(shown.size).toEqual([1920, 462]);
-      // Contracts without a meter take no column, and alpha and beta share the first one.
-      expect(shown.secondColumn).toEqual(background);
-      // The tokens end at the right edge of the cost (x = 330), so their widths differ on the left.
-      for (const [left, right] of Object.values(await extents(page, await preview(page)))) {
-        expect(right).toBeGreaterThanOrEqual(320);
-        expect(right).toBeLessThan(331);
-        expect(left).toBeGreaterThan(60);
-      }
+      expect((await look(page, current, wholeImage, panelFill)).size).toEqual([1920, 462]);
       // The image is drawn again without anything from the Hub when the shown minutes change.
       await expect.poll(() => preview(page), { timeout: 10_000, intervals: [250] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
-      // Lowest remaining first: one (10%) and three (30%) share the first column, four (90%),
-      // late (95%) and last (99%) take the next three, and unknown, reporting nothing, finds no room.
+      // Lowest remaining first, left to right: one (10%, danger) takes the first panel and three
+      // (30%, caution) the second. Four needs more width than is left, so it and every contract
+      // after it are not shown.
       hub.send('stats', ranked());
-      // The earlier image already shows red at the top of the first column, so wait for the yellow.
-      await expect.poll(async () => (await colours(page, await preview(page))).firstColumnSecond).toEqual(yellow);
-      const ordered = await colours(page, await preview(page));
-      expect(ordered.firstColumnTop).toEqual(red);
-      expect(ordered.secondColumnTop).toEqual(green);
-      expect(ordered.fourthColumnTop).toEqual(green);
+      await expect.poll(async () => (await look(page, await preview(page), secondPanel, caution)).count).toBeGreaterThan(100);
+      const ordered = await preview(page);
+      expect((await look(page, ordered, wholeImage, panelFill)).runs).toBe(2);
+      expect((await look(page, ordered, firstPanel, danger)).count).toBeGreaterThan(100);
+      expect((await look(page, ordered, secondPanel, danger)).count).toBe(0);
     });
   } finally {
     await server.stop();
