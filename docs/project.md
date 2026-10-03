@@ -78,19 +78,22 @@
 
 作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
-ゲージ配置の確認では、通常の検証用サーバーを次のように起動します。設定は通常利用とは別の `.test-data/gauge-audit` に保存します。
+段階5の起動環境は [エージェント行動指針](../AGENTS.md) に従います。ゲージ配置の完成系監査では、インストール済みアプリを終了してから、保存済みの実 Hub 接続設定を監査用ディレクトリへ複製し、今回の変更を含むデスクトップアプリを起動します。
 
 ```powershell
-$env:WAILS_SERVER_PORT = '34125'
-$env:WAILS_DATA_DIR = Join-Path (Get-Location) '.test-data/gauge-audit'
+$auditDir = Join-Path (Get-Location) '.test-data/gauge-real-app'
+New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $env:APPDATA 'io.github.nuitsjp.token-monitor-turzx/settings.json') -Destination (Join-Path $auditDir 'settings.json')
+$env:WAILS_DATA_DIR = $auditDir
+$env:WAILS_WEBVIEW_DEBUG_PORT = '9347'
 try {
-    node scripts/run.mjs server
+    node scripts/run.mjs dev
 } finally {
-    Remove-Item Env:WAILS_SERVER_PORT, Env:WAILS_DATA_DIR
+    Remove-Item Env:WAILS_DATA_DIR, Env:WAILS_WEBVIEW_DEBUG_PORT
 }
 ```
 
-`http://127.0.0.1:34125/` の `Connection` で取得元を `Hub` にし、制御可能な SSE サーバーの接続先とトークンを保存します。提供元名が異なる8契約に1円分の利用枠を持たせた snapshot を送り、`Display` の `Gauges` で先頭7契約だけが表示されることを確認します。8契約目と7契約目を外すと6契約になって左端が40pxに戻り、7契約目を選び直すと7契約を左右8pxの余白で表示します。Ctrl+C で終了します。アプリ内で固定データへ差し替える起動設定はありません。
+トレイからウィンドウを開き、`Connection` で取得元が `Hub`、接続先が利用者の実 Hub であることを確認します。`Display` の `Gauges` で受信した利用枠の選択を切り替え、表示できる契約が増える場合にだけ外側余白が縮まり、余裕がある場合は左端が40pxになることを確認します。自動確認は `playwright-cli attach --cdp=http://127.0.0.1:9347` でアプリの WebView2 に接続して行い、操作後は元の選択状態に戻します。アプリをトレイの `Exit` で終了し、開発起動のターミナルで Ctrl+C を押して監視プロセスも止めます。元の設定ファイルは変更しません。
 
 mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
 
