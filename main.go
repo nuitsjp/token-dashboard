@@ -126,7 +126,7 @@ func run() error {
 		return err
 	}
 	usageState := usage.NewState()
-	displayService := &display.Service{}
+	displayService := &display.Service{State: usageState}
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -253,7 +253,10 @@ func runUsageSource(ctx context.Context, service *settings.Service, state *usage
 			cancel, done = stop, make(chan struct{})
 			go func() {
 				defer close(done)
-				if source == "Hub" {
+				if mockLimits() {
+					state.Set(mockStats(time.Now()))
+					<-child.Done()
+				} else if source == "Hub" {
 					hub.New(func() (string, string, error) { return settings.Connection(service) }, state, logger).Run(child)
 				} else {
 					path, err := os.Executable()

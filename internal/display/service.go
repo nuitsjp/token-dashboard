@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/png"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -18,8 +19,46 @@ const Updated = "display:updated"
 
 // Service hands the latest image to the window. The window never draws it.
 type Service struct {
+	// State is where Limits reads the contracts from; SetShown asks it for a redraw.
+	State *usage.State
+
 	mu      sync.Mutex
 	preview string
+	// hidden holds the keys of the windows that are not drawn.
+	hidden map[string]bool
+}
+
+// hiddenSet returns a copy of the hidden keys.
+func (s *Service) hiddenSet() map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return maps.Clone(s.hidden)
+}
+
+// Limits lists the contracts and windows that can be drawn, with whether each is shown. It is empty
+// until the first usage arrives.
+func (s *Service) Limits() []LimitContract {
+	stats, _ := s.State.Snapshot()
+	return contractsOf(stats, s.hiddenSet())
+}
+
+// SetShown shows or hides the windows with the given keys and redraws at once. The other windows keep
+// their state. It returns the list as it is now.
+func (s *Service) SetShown(keys []string, shown bool) []LimitContract {
+	s.mu.Lock()
+	if s.hidden == nil {
+		s.hidden = map[string]bool{}
+	}
+	for _, k := range keys {
+		if shown {
+			delete(s.hidden, k)
+		} else {
+			s.hidden[k] = true
+		}
+	}
+	s.mu.Unlock()
+	s.State.Touch()
+	return s.Limits()
 }
 
 // Preview returns the latest image as a PNG data URL, or "" before the first image.
@@ -37,7 +76,7 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 	defer ticker.Stop()
 	for {
 		stats, source := state.Snapshot()
-		img := renderer.Render(stats, time.Now(), source, style())
+		img := renderer.Render(withoutHidden(stats, s.hiddenSet()), time.Now(), source, style())
 		output(img)
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {
