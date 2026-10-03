@@ -243,31 +243,6 @@ func run() error {
 }
 
 func runUsageSource(ctx context.Context, service *settings.Service, state *usage.State, logger *slog.Logger, changed <-chan struct{}, dataDir string) {
-	// Only the opt-in server mock supplies fixed data for the gauge layout review.
-	if serverMode && os.Getenv("WAILS_GAUGE_MOCK") == "1" {
-		stats := &usage.Stats{Periods: usage.Periods{
-			Today:   usage.Period{TotalTokens: 102344676, CostUSD: 20},
-			Month:   usage.Period{TotalTokens: 950262294, CostUSD: 256.08},
-			AllTime: usage.Period{TotalTokens: 26935128268, CostUSD: 16675.02},
-		}}
-		reset := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
-		for _, contract := range []struct {
-			provider, plan string
-			remaining      float64
-		}{
-			{"cursor", "Pro", 41}, {"antigravity", "Pro", 50},
-			{"claude", "Pro", 81}, {"codex", "Pro", 84},
-			{"opencode", "Go", 89}, {"grok", "SuperGrok", 97},
-			{"gemini", "Pro", 100}, {"copilot", "Pro", 100},
-		} {
-			stats.Limits.Providers = append(stats.Limits.Providers, usage.Provider{
-				Provider: contract.provider, PlanLabel: contract.plan,
-				Windows: []usage.Window{{Kind: "weekly", Label: "weekly", ShowMeter: true, RemainingPercent: &contract.remaining, ResetsAt: &reset}},
-			})
-		}
-		state.Set(stats)
-		return
-	}
 	for {
 		source, err := settings.Source(service)
 		var cancel context.CancelFunc

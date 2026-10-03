@@ -78,22 +78,19 @@
 
 作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
-ゲージ配置のモックは、環境構築後に PowerShell で次のように起動します。設定は通常利用とは別の `.test-data/gauge-review` に保存します。
+ゲージ配置の確認では、通常の検証用サーバーを次のように起動します。設定は通常利用とは別の `.test-data/gauge-audit` に保存します。
 
 ```powershell
-$env:WAILS_GAUGE_MOCK = '1'
 $env:WAILS_SERVER_PORT = '34125'
-$env:WAILS_DATA_DIR = Join-Path (Get-Location) '.test-data/gauge-review'
+$env:WAILS_DATA_DIR = Join-Path (Get-Location) '.test-data/gauge-audit'
 try {
     node scripts/run.mjs server
 } finally {
-    Remove-Item Env:WAILS_GAUGE_MOCK, Env:WAILS_SERVER_PORT, Env:WAILS_DATA_DIR
+    Remove-Item Env:WAILS_SERVER_PORT, Env:WAILS_DATA_DIR
 }
 ```
 
-`http://127.0.0.1:34125/` を開き、`Gauges` を選びます。すべての契約を選択すると、固定データの先頭7契約が表示され、8契約目の copilot は表示されません。copilot と gemini を外すと6契約になり既定の左右余白へ戻り、gemini を選び直すと7契約になって余白が縮まります。Ctrl+C で終了します。固定データと合成点は [UCP-1](design/UCP-1.md) を参照します。
-
-モックを無効にするには `WAILS_GAUGE_MOCK` を設定せずに起動します。通常起動では設定した取得元からの取得・受信が動作し、固定の8契約は入りません。デスクトップ版はこの環境変数を読みません。段階4では合成点の固定データ分岐を削除し、通常の取得・受信経路へ接続します。
+`http://127.0.0.1:34125/` の `Connection` で取得元を `Hub` にし、制御可能な SSE サーバーの接続先とトークンを保存します。提供元名が異なる8契約に1円分の利用枠を持たせた snapshot を送り、`Display` の `Gauges` で先頭7契約だけが表示されることを確認します。8契約目と7契約目を外すと6契約になって左端が40pxに戻り、7契約目を選び直すと7契約を左右8pxの余白で表示します。Ctrl+C で終了します。アプリ内で固定データへ差し替える起動設定はありません。
 
 mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
 
