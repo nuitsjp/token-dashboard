@@ -255,10 +255,10 @@ func (r *Renderer) circle(img *image.RGBA, c circle, showGroup bool, cellX, pane
 		if i == 1 {
 			radius = 72 * k
 		}
-		fillPoly(img, track, arcPoly(cx, cy, radius, 10*k, 135, 270))
+		fillPoly(img, track, arcPoly(cx, cy, radius, 11*k, 135, 270))
 		if w.RemainingPercent != nil {
 			v := min(max(*w.RemainingPercent, 0), 100)
-			fillPoly(img, gaugeColor(w, now), arcPoly(cx, cy, radius, 10*k, 135, 270*v/100))
+			fillPoly(img, gaugeColor(w, now), arcPoly(cx, cy, radius, 11*k, 135, 270*v/100))
 		}
 	}
 	big, small := r.face(true, math.Round(27*k)), r.face(false, math.Round(18*k))
