@@ -11,15 +11,14 @@ function Row({ title, hint, children }: { title: ReactNode; hint?: string; child
   </div>;
 }
 
-function SaveBar({ scope }: { scope: 'connection' | 'display' }) {
+function SaveBar() {
   const draft = useSettingsDraft();
   if (!draft) return null;
-  const dirty = scope === 'connection' ? draft.connectionDirty : draft.displayDirty;
   return <>
-    <ErrorNotice error={draft.saveError} />
-    {draft.done === scope && !dirty && <Alert color="green" py="xs" mt="sm">Saved.</Alert>}
+    <ErrorNotice error={draft.errorFor('connection')} />
+    {draft.done && !draft.connectionDirty && <Alert color="green" py="xs" mt="sm">Saved.</Alert>}
     <Group justify="flex-end" mt="md" pt="md" className={styles.bar}>
-      <Button loading={draft.saving} onClick={() => draft.submit(scope)}>Save</Button>
+      <Button loading={draft.saving} onClick={draft.submitConnection}>Save</Button>
     </Group>
   </>;
 }
@@ -46,8 +45,21 @@ export function ConnectionSettings() {
           onChange={e => draft.setToken(e.currentTarget.value)} />
       </Row>
     </>}
-    <SaveBar scope="connection" />
+    <SaveBar />
   </Card>;
+}
+
+// The style choice sits right of the Style title. It applies and saves at once.
+export function StyleSelect() {
+  const draft = useSettingsDraft();
+  if (!draft) return null;
+  return <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
+    onChange={value => { if (value) draft.setStyle(value); }} />;
+}
+
+export function StyleError() {
+  const draft = useSettingsDraft();
+  return draft ? <ErrorNotice error={draft.errorFor('display')} /> : null;
 }
 
 export function DisplaySettings() {
@@ -58,12 +70,12 @@ export function DisplaySettings() {
     { value: automatic, label: 'Automatic' },
     ...displays.map(d => ({ value: d.deviceID, label: d.connected ? d.name : `${d.name} (Disconnected)` })),
   ];
-  return <Card withBorder padding="md">
-    <Title order={4} mb="sm">Output</Title>
-    <Row title="Output device" hint={displays.length === 0 ? 'No TURZX display is connected.' : 'Where the usage is shown'}>
-      <Select aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
+  return <Card withBorder padding="sm">
+    <Group wrap="nowrap" gap="sm">
+      <Title order={5}>Output</Title>
+      <Select flex={1} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
         onChange={value => { if (value) draft.setDisplay(value); }} />
-    </Row>
-    <SaveBar scope="display" />
+    </Group>
+    {displays.length === 0 && <Text size="xs" c="dimmed" mt="xs">No TURZX display is connected.</Text>}
   </Card>;
 }

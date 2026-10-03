@@ -32,12 +32,12 @@ func (s *Service) Preview() string {
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
 // until reset stays current. Each image goes to the preview in s and to output. It is a function,
 // not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
+func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
 	for {
 		stats, source := state.Snapshot()
-		img := renderer.Render(stats, time.Now(), source)
+		img := renderer.Render(stats, time.Now(), source, style())
 		output(img)
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {

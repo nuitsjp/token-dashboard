@@ -46,8 +46,10 @@ test('保存した接続先と表示先を、再起動後も復元する', async
       await open('Display');
       await device.click();
       await page.getByRole('option', { name: 'Automatic' }).click();
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByText('Saved.')).toBeVisible();
+      await expect(device).toHaveValue('Automatic');
+      // The Display page has no Save button, and a saved choice shows no message.
+      await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+      await expect(page.getByText('Saved.')).toHaveCount(0);
     });
     await test.step('手順5', async () => {
       await server.stop();
@@ -63,7 +65,7 @@ test('保存した接続先と表示先を、再起動後も復元する', async
       const saved = readFileSync(join(dataDir, 'settings.json'), 'utf8');
       expect(saved).not.toContain('hub.example.com');
       expect(saved).not.toContain('e2e-secret-token');
-      // Two pages in a side menu. Input is kept across pages, and each Save stores only its own page.
+      // Two pages in a side menu. Input is kept across pages. A choice on Display saves at once and does not save the Connection input.
       await expect(page.getByRole('link', { name: 'Display' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Connection' })).toBeVisible();
       await open('Connection');
@@ -72,8 +74,8 @@ test('保存した接続先と表示先を、再起動後も復元する', async
       await open('Connection');
       await expect(hubURL).toHaveValue('http://127.0.0.1:9999');
       await open('Display');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByText('Saved.')).toBeVisible();
+      await device.click();
+      await page.getByRole('option', { name: 'Automatic' }).click();
       await page.reload();
       await open('Connection');
       await expect(hubURL).toHaveValue('https://hub.example.com');

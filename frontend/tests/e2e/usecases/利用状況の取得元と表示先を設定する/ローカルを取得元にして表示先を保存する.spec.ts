@@ -52,6 +52,10 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await page.keyboard.press('Escape');
     });
     await test.step('手順2', async () => {
+      // The image checks read the Bars layout (the divider after Tokens).
+      await open('Display');
+      await page.getByRole('textbox', { name: 'Display style' }).click();
+      await page.getByRole('option', { name: 'Bars' }).click();
       await open('Connection');
       await source.click();
       await page.getByRole('option', { name: 'Local' }).click();
@@ -67,9 +71,10 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await device.click();
       await page.getByRole('option', { name: selectedDevice, exact: true }).click();
       await expect(device).toHaveValue(selectedDevice);
+      // The Display page has no Save button, and a saved choice shows no message.
+      await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
       await expect(page.getByText('Saved.')).toHaveCount(0);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByText('Saved.')).toBeVisible();
+      await expect.poll(() => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')).displayName || 'Automatic').toBe(selectedDevice);
       const saved = JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
       expect(saved.displayName || 'Automatic').toBe(selectedDevice);
       await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);

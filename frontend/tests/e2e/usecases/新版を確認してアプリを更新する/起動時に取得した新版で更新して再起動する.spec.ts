@@ -103,7 +103,7 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
       expect(window.title).toBe('Token Monitor TURZX v0.1.0');
       expect(window.text).toContain('Version 0.2.0 is ready to install.');
       expect(window.names).toContain('Update and restart');
-      expect(window.names.indexOf('Update and restart')).toBeLessThan(window.names.indexOf('Preview'));
+      expect(window.names.indexOf('Update and restart')).toBeLessThan(window.names.indexOf('Style'));
     });
     await test.step('手順4', async () => {
       pressButton(oldPid, 'Update and restart');
@@ -118,7 +118,7 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
       launch(installedExe, env);
       const window = windowState(appProcesses(installedExe)[0]);
       expect(window.title).toBe('Token Monitor TURZX v0.2.0');
-      expect(window.names).toContain('Save');
+      expect(window.names).toContain('Style');
       expect(window.names).not.toContain('Update and restart');
     });
     await test.step('受け入れ条件', async () => {

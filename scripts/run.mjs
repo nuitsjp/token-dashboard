@@ -72,7 +72,8 @@ try {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
     if (command === 'dev') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
-      run(cli, ['dev']);
+      // Not the Wails default 9245, which other Wails projects on this PC also use.
+      run(cli, ['dev', '-port', '9345']);
     } else if (command === 'test:desktop') {
       // Installs, updates and uninstalls the desktop app; never part of verify.
       run(cli, ['task', 'build:server']);

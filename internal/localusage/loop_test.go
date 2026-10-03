@@ -21,7 +21,7 @@ import (
 )
 
 // testIntervals are short so that the tests do not wait for real time.
-var testIntervals = Intervals{Settle: 50 * time.Millisecond, Graph: 500 * time.Millisecond, Poll: 2 * time.Second, MaxSyncDelay: 4 * time.Second}
+var testIntervals = Intervals{Settle: 50 * time.Millisecond, Graph: 500 * time.Millisecond, Poll: 2 * time.Second, Limits: 2 * time.Second, MaxSyncDelay: 4 * time.Second}
 
 // TestMain lets the test binary act as tokscale when the reader runs it with a TOKSCALE_CONFIG_DIR
 // whose parent holds a fake-tokscale file. Each test has its own folder, so tests run in parallel.
@@ -225,6 +225,7 @@ func TestFailedGraphKeepsTheShownUsageAndCursorWithoutAccountIsNotSynced(t *test
 func TestChangesRunGraphAtMostOncePerIntervalWithoutOverlap(t *testing.T) {
 	t.Parallel()
 	f := newFakeTokscale(t)
+	began := time.Now()
 	_, stop := f.start(quiet())
 	// Changes keep coming for 1.5 seconds, more often than the graph may run.
 	for i := range 30 {
@@ -253,26 +254,27 @@ func TestChangesRunGraphAtMostOncePerIntervalWithoutOverlap(t *testing.T) {
 			t.Fatalf("usage %d started before usage %d ended", i, i-1)
 		}
 	}
-	// Changes read the limits with each graph, not with each change.
-	if len(limits) > len(graphs)+1 {
-		t.Fatalf("usage ran %d times with %d graphs", len(limits), len(graphs))
+	// The limits are rate-limited by their providers, so changes and graphs do not read them: only
+	// the start and each period do.
+	if allowed := 2 + int(time.Since(began)/testIntervals.Limits); len(limits) > allowed {
+		t.Fatalf("usage ran %d times with %d graphs in %v, want at most %d", len(limits), len(graphs), time.Since(began), allowed)
 	}
 }
 
-func TestLimitsAreReadAgainEveryPollWithoutChanges(t *testing.T) {
+func TestLimitsAreReadAgainEveryLimitsPeriodWithoutChanges(t *testing.T) {
 	t.Parallel()
 	f := newFakeTokscale(t)
 	_, stop := f.start(quiet())
-	time.Sleep(2*testIntervals.Poll + testIntervals.Poll/2)
+	time.Sleep(2*testIntervals.Limits + testIntervals.Limits/2)
 	stop()
 	limits := f.runs("usage --json")
 	if len(limits) < 3 {
-		t.Fatalf("usage ran %d times in 2.5 polls after the start, want at least 3", len(limits))
+		t.Fatalf("usage ran %d times in 2.5 periods after the start, want at least 3", len(limits))
 	}
 	for i := 1; i < len(limits); i++ {
 		// The timer counts from the request, the record from after the launch, which takes up to a few hundred milliseconds when other runs start at once.
-		if gap := limits[i].start.Sub(limits[i-1].start); gap < testIntervals.Poll-500*time.Millisecond || gap > testIntervals.Poll+500*time.Millisecond {
-			t.Fatalf("usage %d started %v after the previous one, want about %v", i, gap, testIntervals.Poll)
+		if gap := limits[i].start.Sub(limits[i-1].start); gap < testIntervals.Limits-500*time.Millisecond || gap > testIntervals.Limits+500*time.Millisecond {
+			t.Fatalf("usage %d started %v after the previous one, want about %v", i, gap, testIntervals.Limits)
 		}
 	}
 	if n := len(f.runs("graph --no-spinner")); n != 1 {

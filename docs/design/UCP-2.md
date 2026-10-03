@@ -4,9 +4,9 @@
 
 | 役割 | 責務 | 実装パス（段階4完了時に記入） |
 | --- | --- | --- |
-| 設定区画 | 保存済みの取得元と表示先・選択肢を表示し、入力を保存まで画面上に保持し、画面ごとの `Save` でその画面の項目だけを保存する。Hub 選択時だけ接続先の入力を表示し、認証トークンは入力だけを受けて表示しない | `frontend/src/usecases/configure-hub/ConfigureHub.tsx` |
+| 設定区画 | 保存済みの取得元と表示先・選択肢を表示し、表示先と表示スタイルは `Display` 画面で選んだ時点で反映して保存し、失敗したら選択を戻してエラーを表示する。取得元と接続先の入力は `Connection` 画面で保存まで保持し、`Save` で保存する。Hub 選択時だけ接続先の入力を表示し、認証トークンは入力だけを受けて表示しない | `frontend/src/usecases/configure-hub/ConfigureHub.tsx`、`frontend/src/usecases/configure-hub/SettingsDraft.tsx`、`frontend/src/usecases/show-usage/UsagePreview.tsx`、`frontend/src/app/Shell.tsx` |
 | 機能アクセス | 本体の設定サービスを呼び出し、取得結果と保存結果を画面の状態へ反映する | `frontend/src/features/settings/queries.ts` |
-| 設定サービス | 取得元と表示先を検証して設定ファイルを置き換える。Hub 選択時は接続先 URL と認証トークンを1組で DPAPI により暗号化し、画面へは認証トークンの設定有無だけを返す。保存後に取得元の再評価を通知する | `internal/settings/service.go`、`internal/settings/dpapi_windows.go` |
+| 設定サービス | 取得元・表示先・表示スタイルを検証して設定ファイルを置き換える。表示スタイルが変わったときは、描画へ知らせて画像を描き直す。Hub 選択時は接続先 URL と認証トークンを1組で DPAPI により暗号化し、画面へは認証トークンの設定有無だけを返す。取得元または接続設定が変わったときだけ、取得元の再評価を通知する（表示先と表示スタイルの変更では、取得を止めない） | `internal/settings/service.go`、`internal/settings/dpapi_windows.go` |
 | 取得元切替 | 保存済みの取得元を読み、従前の取得処理を停止して選択した取得処理を起動する。ローカル取得は同梱の tokscale の結果を表示用の最新状態へ変換する | `main.go`、`internal/localusage/reader.go`、`internal/hub/receiver.go` |
 | TURZX 列挙 | 接続中の TURZX を列挙し、機器の識別子と、製品名とシリアル番号から作る表示名を返す | `internal/turzx/devices.go`、`internal/turzx/devices_windows.go` |
 

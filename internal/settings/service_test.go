@@ -210,3 +210,73 @@ func TestUnreadableFileIsNotOverwritten(t *testing.T) {
 		t.Fatal("unreadable settings were overwritten")
 	}
 }
+
+func TestLimitStyleDefaultsToGaugesAndIsSavedInTheFile(t *testing.T) {
+	devices := []turzx.Device{}
+	s, path := newService(t, &devices)
+	if view, err := s.Get(); err != nil || view.LimitStyle != "Gauges" || LimitStyle(s) != "Gauges" {
+		t.Fatalf("default view = %+v, %v", view, err)
+	}
+	if _, err := s.Save(SaveRequest{Source: "Local", LimitStyle: "Bars"}); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"limitStyle": "Bars"`) {
+		t.Fatalf("settings file = %s", data)
+	}
+	if view, _ := s.Get(); view.LimitStyle != "Bars" || LimitStyle(s) != "Bars" {
+		t.Fatalf("saved view = %+v", view)
+	}
+	// An empty style keeps the saved one, and Gauges can be chosen again.
+	if view, err := s.Save(SaveRequest{Source: "Local"}); err != nil || view.LimitStyle != "Bars" {
+		t.Fatalf("empty style view = %+v, %v", view, err)
+	}
+	if view, err := s.Save(SaveRequest{Source: "Local", LimitStyle: "Gauges"}); err != nil || view.LimitStyle != "Gauges" {
+		t.Fatalf("gauges view = %+v, %v", view, err)
+	}
+	_, err := s.Save(SaveRequest{Source: "Local", LimitStyle: "Dials"})
+	if got := fieldErrors(t, err)["limitStyle"]; got == "" {
+		t.Fatal("an unknown style was accepted")
+	}
+	if LimitStyle(s) != "Gauges" {
+		t.Fatalf("style after a rejected save = %q", LimitStyle(s))
+	}
+}
+
+func TestOnlyANewSourceOrConnectionRestartsReading(t *testing.T) {
+	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}}
+	s, _ := newService(t, &devices)
+	var sources, styles int
+	s.OnSaved = func() { sources++ }
+	s.OnStyleSaved = func() { styles++ }
+	save := func(req SaveRequest) {
+		t.Helper()
+		if _, err := s.Save(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hub := SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "secret"}
+	save(hub)
+	if sources != 1 {
+		t.Fatalf("a new source restarted reading %d times", sources)
+	}
+	// A display or style choice must not interrupt reading, which would blank the image.
+	hub.Token, hub.DisplayID, hub.LimitStyle = "", first, "Bars"
+	save(hub)
+	if sources != 1 || styles != 1 {
+		t.Fatalf("display and style: restarts = %d, style changes = %d", sources, styles)
+	}
+	hub.DisplayID, hub.LimitStyle = "", "Bars"
+	save(hub)
+	if sources != 1 || styles != 1 {
+		t.Fatalf("same style again: restarts = %d, style changes = %d", sources, styles)
+	}
+	hub.URL = "https://other.example.com"
+	save(hub)
+	if sources != 2 {
+		t.Fatalf("a new connection restarted reading %d times", sources)
+	}
+	save(SaveRequest{Source: "Local", LimitStyle: "Bars"})
+	if sources != 3 {
+		t.Fatalf("a new source restarted reading %d times", sources)
+	}
+}

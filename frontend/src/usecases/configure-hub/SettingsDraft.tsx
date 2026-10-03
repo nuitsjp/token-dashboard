@@ -7,6 +7,7 @@ import { publicError } from '../../shared/errors';
 import { useDraftDirty } from '../../shared/ExitContext';
 
 type Scope = 'connection' | 'display';
+type DisplayChange = { display?: string; style?: string };
 export const automatic = '__automatic__';
 
 function useDraft(saved: View) {
@@ -14,37 +15,47 @@ function useDraft(saved: View) {
   const [source, setSource] = useState(saved.source || 'Local');
   const [url, setURL] = useState(saved.url);
   const [token, setToken] = useState('');
-  const [display, setDisplay] = useState(saved.displayID || automatic);
-  const [done, setDone] = useState<Scope | null>(null);
+  const [pending, setPending] = useState<DisplayChange>({});
+  const [done, setDone] = useState(false);
+  const [failed, setFailed] = useState<Scope | null>(null);
   const connectionDirty = source !== (saved.source || 'Local') || (source === 'Hub' && (url !== saved.url || token !== ''));
-  const displayDirty = display !== (saved.displayID || automatic);
-  const dirty = connectionDirty || displayDirty;
-  useDraftDirty(dirty);
-  const edit = <T,>(set: (value: T) => void) => (value: T) => { set(value); setDone(null); };
-  // Each page saves only its own fields. The other page's unsaved input is neither sent nor reset.
-  async function submit(scope: Scope) {
-    setDone(null);
-    const connection = scope === 'connection';
-    const view = await save.mutateAsync({
-      source: connection ? source : saved.source || 'Local',
-      url: connection ? url : saved.url,
-      token: connection ? token : '',
-      displayID: connection ? saved.displayID : display === automatic ? '' : display,
-    });
-    if (connection) {
+  useDraftDirty(connectionDirty);
+  const edit = <T,>(set: (value: T) => void) => (value: T) => { set(value); setDone(false); };
+  // The Connection page saves with its Save button. The other page's saved values are sent as they are.
+  async function submitConnection() {
+    setDone(false);
+    setFailed(null);
+    try {
+      const view = await save.mutateAsync({ source, url, token, displayID: saved.displayID, limitStyle: saved.limitStyle });
       setSource(view.source || 'Local');
       setURL(view.url);
       setToken('');
-    } else setDisplay(view.displayID || automatic);
-    setDone(scope);
+      setDone(true);
+    } catch { setFailed('connection'); }
+  }
+  // The Display page applies and saves a choice at once. A failed save leaves the saved value shown.
+  async function applyDisplay(change: DisplayChange) {
+    setPending(change);
+    setFailed(null);
+    try {
+      await save.mutateAsync({
+        source: saved.source || 'Local', url: saved.url, token: '',
+        displayID: change.display === undefined ? saved.displayID : change.display === automatic ? '' : change.display,
+        limitStyle: change.style ?? saved.limitStyle,
+      });
+    } catch { setFailed('display'); } finally { setPending({}); }
   }
   return {
-    saved, source, url, token, display, connectionDirty, displayDirty, done,
-    setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken), setDisplay: edit(setDisplay),
+    saved, source, url, token, connectionDirty, done,
+    display: pending.display ?? (saved.displayID || automatic),
+    style: pending.style ?? (saved.limitStyle || 'Gauges'),
+    setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken),
+    setDisplay: (display: string) => void applyDisplay({ display }),
+    setStyle: (style: string) => void applyDisplay({ style }),
     saving: save.isPending,
-    saveError: save.error,
+    errorFor: (scope: Scope) => failed === scope ? save.error : null,
     fields: save.error ? publicError(save.error).fieldErrors ?? {} : {},
-    submit: (scope: Scope) => void submit(scope).catch(() => {}),
+    submitConnection: () => void submitConnection(),
   };
 }
 
@@ -55,7 +66,7 @@ function Provider({ saved, children }: { saved: View; children: ReactNode }) {
   return <Context.Provider value={useDraft(saved)}>{children}</Context.Provider>;
 }
 
-// The draft spans the Display and Connection pages; each page saves only its own fields.
+// The draft spans the Display and Connection pages. Display choices save at once; Connection saves with its button.
 export function SettingsDraftProvider({ children }: { children: ReactNode }) {
   const settings = useQuery(getSettings());
   if (settings.data) return <Provider saved={settings.data}>{children}</Provider>;

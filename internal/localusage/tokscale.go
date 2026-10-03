@@ -207,6 +207,7 @@ func convertProviders(providers []provider) (usage.Limits, error) {
 				return usage.Limits{}, err
 			}
 			converted.Windows = append(converted.Windows, usage.Window{
+				Kind:             kindOf(m.Label),
 				Label:            m.Label,
 				ShowMeter:        m.UsedPercent != nil || m.RemainingPercent != nil,
 				UsedPercent:      m.UsedPercent,
@@ -217,6 +218,18 @@ func convertProviders(providers []provider) (usage.Limits, error) {
 		out.Providers = append(out.Providers, converted)
 	}
 	return out, nil
+}
+
+// kindOf is the window kind named by the last word of a tokscale label, so that the display can look
+// up the window length like it does for the Hub. Other labels have no kind.
+func kindOf(label string) string {
+	l := strings.ToLower(strings.TrimSpace(label))
+	for suffix, kind := range map[string]string{"5-hour": "session", "5h": "session", "session": "session", "daily": "daily", "weekly": "weekly", "monthly": "billing"} {
+		if strings.HasSuffix(l, suffix) {
+			return kind
+		}
+	}
+	return ""
 }
 
 func parseReset(value *string) (*time.Time, error) {

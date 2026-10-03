@@ -41,6 +41,8 @@ type Window struct {
 	RemainingPercent *float64   `json:"remainingPercent"`
 	UsedPercent      *float64   `json:"usedPercent"`
 	ResetsAt         *time.Time `json:"resetsAt"`
+	// WindowMinutes is the length of the window; nil when the source does not report it.
+	WindowMinutes *float64 `json:"windowMinutes"`
 }
 
 // State is the in-memory latest Stats. Nil means no snapshot has arrived yet.
@@ -86,6 +88,14 @@ func (s *State) Snapshot() (*Stats, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.latest, s.source
+}
+
+// Touch asks the display to redraw although the stats did not change.
+func (s *State) Touch() {
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
 }
 
 // Changed receives after one or more Set calls; only the newest value matters.
