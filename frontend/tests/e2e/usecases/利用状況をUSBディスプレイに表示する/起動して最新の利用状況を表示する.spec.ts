@@ -79,9 +79,14 @@ async function look(page: Page, src: string, area: readonly [number, number, num
     let count = 0;
     for (let i = 0; i < data.length; i += 4) if (same(data, i)) count++;
     const line = context.getImageData(0, row, img.naturalWidth, 1).data;
-    let runs = 0;
-    for (let x = 0; x < img.naturalWidth; x++) if (same(line, x * 4) && (x === 0 || !same(line, (x - 1) * 4))) runs++;
-    return { count, runs, size: [img.naturalWidth, img.naturalHeight] };
+    const ranges: number[][] = [];
+    for (let x = 0; x < img.naturalWidth; x++) {
+      if (!same(line, x * 4)) continue;
+      const start = x;
+      while (x < img.naturalWidth && same(line, x * 4)) x++;
+      ranges.push([start, x]);
+    }
+    return { count, runs: ranges.length, ranges, size: [img.naturalWidth, img.naturalHeight] };
   }, { src, area, rgb, row });
 }
 
@@ -185,6 +190,43 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       expect((await look(page, ordered, wholeImage, panelFill)).runs).toBe(2);
       expect((await look(page, ordered, firstPanel, danger)).count).toBeGreaterThan(100);
       expect((await look(page, ordered, secondPanel, danger)).count).toBe(0);
+
+      // At y=140 only the panel fill crosses the row. Include the one-pixel border on each side.
+      const panelBounds = async () => (await look(page, await preview(page), wholeImage, panelFill, 140))
+        .ranges.map(([left, right]) => [left - 1, right + 1]);
+      // Reducing the margins cannot fit the next ranked contract, so the default remains.
+      expect(await panelBounds()).toEqual([[40, 300], [314, 1078]]);
+
+      const layoutStats = (circles: number[]) => ({
+        ...stats(12),
+        limits: { providers: circles.map((size, i) => ({
+          provider: `layout${i}`, planLabel: 'Pro',
+          windows: Array.from({ length: size }, (_, j) => ({
+            kind: 'weekly', label: `circle${j}`, showMeter: true,
+            remainingPercent: 50 + i, usedPercent: 50 - i, resetsAt: hours(50),
+          })),
+        })) },
+      });
+      const showLayout = async (circles: number[], bounds: number[][]) => {
+        hub.send('stats', layoutStats(circles));
+        // The list also proves receipt when adding a clipped contract leaves the image unchanged.
+        await expect(page.getByRole('checkbox')).toHaveCount(circles.length + circles.reduce((sum, size) => sum + size, 0));
+        await expect.poll(panelBounds).toEqual(bounds);
+      };
+
+      // Six separate contracts keep 40px margins; seven use equal 8px margins without shrinking panels.
+      const six = Array.from({ length: 6 }, (_, i) => [40 + i * 274, 300 + i * 274]);
+      const seven = Array.from({ length: 7 }, (_, i) => [8 + i * 274, 268 + i * 274]);
+      await showLayout([1, 1, 1, 1, 1, 1], six);
+      await showLayout([1, 1, 1, 1, 1, 1, 1], seven);
+      // An eighth contract is omitted, and returning to seven may produce the identical image.
+      await showLayout([1, 1, 1, 1, 1, 1, 1, 1], seven);
+      await showLayout([1, 1, 1, 1, 1, 1, 1], seven);
+      await showLayout([1, 1, 1, 1, 1, 1], six);
+      // Seven circles in five contracts use 30px margins and retain 512px/260px panel widths.
+      await showLayout([2, 2, 1, 1, 1], [[30, 542], [556, 1068], [1082, 1342], [1356, 1616], [1630, 1890]]);
+      // A first contract wider than the whole image prevents later smaller contracts from being drawn.
+      await showLayout([8, 1], []);
     });
   } finally {
     await server.stop();

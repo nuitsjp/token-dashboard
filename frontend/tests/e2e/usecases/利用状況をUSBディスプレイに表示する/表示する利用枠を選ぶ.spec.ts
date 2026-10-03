@@ -29,7 +29,7 @@ const meter = (kind: string, label: string, remaining: number, resetHours: numbe
 const contract = (provider: string, plan: string, ...windows: ReturnType<typeof meter>[]) =>
   ({ provider, accountLabel: `${provider}@example.com`, planLabel: plan, windows });
 
-// Seven contracts of one circle each, but only six fit in the width, in the order of the lowest
+// Seven contracts of one circle each fit by reducing the margins, in the order of the lowest
 // remaining percent of the windows that are drawn: alpha (10, red; 90 without its 5-hour), beta (45),
 // c1 to c4 (50) and zulu (79). Only zulu is drawn in caution, by the pace rule (200 hours to reset
 // exceeds the week), so the caution colour shows when zulu is drawn. Only alpha's 5-hour is drawn in
@@ -88,7 +88,7 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
   const sw = (name: string) => page.getByRole('checkbox', { name, exact: true });
   const colourCount = async (colour: number[] | null, rect?: number[]) => count(page, await preview(page), colour, rect);
   let requests = 0;
-  let withoutAlpha = 0;
+  let withBeta = 0;
   try {
     await test.step('分岐条件', async () => {
       // The Hub connection is saved. Until the first usage arrives, the list is empty and says so.
@@ -118,9 +118,9 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
       for (const name of ['zulu Pro', 'alpha Pro', 'beta Max', 'c1 Pro', 'c2 Pro', 'c3 Pro', 'c4 Pro']) await expect(sw(name)).toHaveAttribute('aria-checked', 'true');
       await expect(sw('alpha Pro 5-hour')).toContainText('10%');
       await expect(sw('alpha Pro Weekly')).toContainText('90%');
-      // Six of the seven contracts fit: alpha's 5-hour is drawn, and zulu, the last, is not.
+      // All seven contracts fit: alpha's 5-hour and zulu's weekly window are drawn.
       await expect.poll(() => colourCount(danger)).toBeGreaterThan(drawn);
-      expect(await colourCount(caution)).toBeLessThan(drawn);
+      expect(await colourCount(caution)).toBeGreaterThan(drawn);
       expect(file().hiddenLimits).toBeUndefined();
       requests = hub.requests.length;
     });
@@ -134,30 +134,29 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
       await expect(sw('alpha Pro')).toHaveAttribute('aria-checked', 'mixed');
       await expect(page.getByText('Saved.')).toHaveCount(0);
       await expect.poll(() => colourCount(danger)).toBeLessThan(drawn);
-      // The order uses the windows that are drawn: alpha, now at 90%, moves behind zulu (79%), which
-      // takes its room, and alpha, the seventh, does not fit.
+      // The order uses the windows that are drawn: alpha, now at 90%, moves behind zulu (79%),
+      // and all seven contracts remain visible.
       await expect.poll(() => colourCount(caution)).toBeGreaterThan(drawn);
-      withoutAlpha = await colourCount(normal);
+      withBeta = await colourCount(normal);
       expect(file().hiddenLimits).toEqual([alphaSession]);
       expect(hub.requests.length).toBe(requests);
       expect(hub.streams()).toBe(1);
     });
     await test.step('手順3', async () => {
-      // Hiding a contract hides its windows, which frees room for alpha, whose 90% arc adds to the
-      // violet that beta's 45% arc had.
+      // Hiding a contract hides its windows, removing beta's violet 45% arc.
       await sw('beta Max').click();
       await expect(sw('beta Max')).toHaveAttribute('aria-checked', 'false');
       await expect(sw('beta Max Weekly')).toHaveAttribute('aria-checked', 'false');
-      await expect.poll(() => colourCount(normal)).toBeGreaterThan(withoutAlpha + 200);
+      await expect.poll(() => colourCount(normal)).toBeLessThan(withBeta - 200);
       expect(await colourCount(caution)).toBeGreaterThan(drawn);
       expect(file().hiddenLimits).toEqual([alphaSession, betaWeekly].sort());
     });
     await test.step('手順4', async () => {
-      // Showing the contract again shows all its windows, and alpha is pushed out again.
+      // Showing the contract again shows all its windows and restores beta's violet arc.
       await sw('beta Max').click();
       await expect(sw('beta Max')).toHaveAttribute('aria-checked', 'true');
       await expect(sw('beta Max Weekly')).toHaveAttribute('aria-checked', 'true');
-      await expect.poll(() => colourCount(normal)).toBeLessThan(withoutAlpha + 200);
+      await expect.poll(() => colourCount(normal)).toBeGreaterThan(withBeta - 200);
       expect(file().hiddenLimits).toEqual([alphaSession]);
     });
     await test.step('手順5', async () => {

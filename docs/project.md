@@ -73,9 +73,27 @@
 - この PC の Windows 11 には、日本語と英数字の両方を含む游ゴシック（Windows のフォントフォルダーの `YuGothM.ttc`、`YuGothB.ttc`）があります（2026-09-27 に確認）。
 
 <a id="commands"></a>
+<a id="execution"></a>
 ## 5. 実行・切り替え・検証手順
 
 作業ディレクトリはリポジトリのルートです。Go 1.25以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
+
+段階5の起動環境は [エージェント行動指針](../AGENTS.md) に従います。ゲージ配置の完成系監査では、インストール済みアプリを終了してから、保存済みの実 Hub 接続設定を監査用ディレクトリへ複製し、今回の変更を含むデスクトップアプリを起動します。
+
+```powershell
+$auditDir = Join-Path (Get-Location) '.test-data/gauge-real-app'
+New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $env:APPDATA 'io.github.nuitsjp.token-monitor-turzx/settings.json') -Destination (Join-Path $auditDir 'settings.json')
+$env:WAILS_DATA_DIR = $auditDir
+$env:WAILS_WEBVIEW_DEBUG_PORT = '9347'
+try {
+    node scripts/run.mjs dev
+} finally {
+    Remove-Item Env:WAILS_DATA_DIR, Env:WAILS_WEBVIEW_DEBUG_PORT
+}
+```
+
+トレイからウィンドウを開き、`Connection` で取得元が `Hub`、接続先が利用者の実 Hub であることを確認します。`Display` の `Gauges` で受信した利用枠の選択を切り替え、表示できる契約が増える場合にだけ外側余白が縮まり、余裕がある場合は左端が40pxになることを確認します。自動確認は `playwright-cli attach --cdp=http://127.0.0.1:9347` でアプリの WebView2 に接続して行い、操作後は元の選択状態に戻します。アプリをトレイの `Exit` で終了し、開発起動のターミナルで Ctrl+C を押して監視プロセスも止めます。元の設定ファイルは変更しません。
 
 mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
 
