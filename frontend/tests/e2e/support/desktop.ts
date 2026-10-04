@@ -23,7 +23,7 @@ export function appProcesses(exe: string): number[] {
 // React may split one sentence into several text nodes; `text` joins them back.
 export interface WindowState { title: string; names: string[]; text: string; hubURL: string }
 
-// Reads the visible window once the page has loaded (the Save button is always present).
+// Reads the currently visible page without navigating or waiting for page content.
 export function windowState(pid: number): WindowState {
   return JSON.parse(powershell(`
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
@@ -34,15 +34,7 @@ for ($i = 0; $i -lt 40 -and -not $win; $i++) {
   if (-not $win) { Start-Sleep -Milliseconds 500 }
 }
 if (-not $win) { throw 'window not found' }
-$names = @()
-for ($i = 0; $i -lt 40; $i++) {
-  $names = @($win.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-  if ($names -contains 'Style') { break }
-  Start-Sleep -Milliseconds 500
-}
-# The window opens on Display. The saved connection is on the Connection page.
-$link = $win.FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Connection')))
-if ($link) { $link.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); Start-Sleep -Milliseconds 1000 }
+$names = @($win.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
 $edit = $win.FindFirst('Descendants', (New-Object System.Windows.Automation.AndCondition(
   (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Hub URL')),
   (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)))))

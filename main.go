@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -108,6 +109,7 @@ func run() error {
 	state := &appstate.State{}
 	var app *application.App
 	var window *application.WebviewWindow
+	var closing atomic.Bool
 	emit := func(name string, data any) {
 		if app != nil {
 			app.Event.Emit(name, data)
@@ -121,7 +123,13 @@ func run() error {
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
-	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
+	updateStatusChanged := func(updates.Status) {}
+	updateService := updates.New(updateConfig, state, logger, func(status updates.Status) {
+		if !closing.Load() {
+			emit(updates.ProgressEvent, status)
+			updateStatusChanged(status)
+		}
+	}, updates.LaunchInstaller, controls.ApproveQuit)
 	renderer, err := display.NewRenderer()
 	if err != nil {
 		return err
@@ -131,7 +139,11 @@ func run() error {
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
-	ctx, stop := context.WithCancel(context.Background())
+	background := desktop.NewBackground()
+	stop := func() {
+		closing.Store(true)
+		background.Stop()
+	}
 	defer stop()
 	options := application.Options{
 		Name: cfg.Name, Description: "利用状況を TURZX に表示する常駐アプリ", Logger: logger,
@@ -139,14 +151,9 @@ func run() error {
 		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService), application.NewService(displayService)},
 		MarshalError: fault.Marshal,
 		ShouldQuit:   controls.ShouldQuit,
-		OnShutdown: func() {
-			stop()
-			if !serverMode {
-				output.Wait()
-			}
-		},
-		Server:  application.ServerOptions{Host: "127.0.0.1", Port: port},
-		Windows: application.WindowsOptions{WebviewUserDataPath: filepath.Join(dir, "webview")},
+		OnShutdown:   stop,
+		Server:       application.ServerOptions{Host: "127.0.0.1", Port: port},
+		Windows:      application.WindowsOptions{WebviewUserDataPath: filepath.Join(dir, "webview")},
 	}
 	if port := os.Getenv("WAILS_WEBVIEW_DEBUG_PORT"); port != "" && !production {
 		// Development only: lets Playwright CLI attach to the WebView2 over CDP.
@@ -166,11 +173,13 @@ func run() error {
 	app = application.New(options)
 	sink := func(*image.RGBA) {}
 	if !serverMode {
-		go output.Run(ctx)
+		background.Go(output.Run)
 		sink = output.Submit
 	}
 	settingsService.OnStyleSaved = usageState.Touch
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	background.Go(func(ctx context.Context) {
+		display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	})
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -178,8 +187,9 @@ func run() error {
 		default:
 		}
 	}
-	go runUsageSource(ctx, settingsService, usageState, logger, sourceChanged, dir)
-	updateReady := func(string) {}
+	background.Go(func(ctx context.Context) {
+		runUsageSource(ctx, settingsService, usageState, logger, sourceChanged, dir)
+	})
 	if !serverMode {
 		// The app lives in the task tray. Closing the window only hides it.
 		// The title bar is the only place that shows the name and version.
@@ -202,7 +212,7 @@ func run() error {
 			})
 		}
 		menu := application.NewMenu()
-		update :=menu.Add("").SetHidden(true)
+		update := menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {
@@ -219,8 +229,17 @@ func run() error {
 		tray.SetTooltip(cfg.Name)
 		tray.SetMenu(menu)
 		tray.OnClick(show)
-		setUpdate := func(label string) {
-			application.InvokeSync(func() {
+		lastLabel := ""
+		updateStatusChanged = func(status updates.Status) {
+			label := ""
+			if status.Phase == updates.PhaseReady {
+				label = "Update and restart (v" + status.Version + ")"
+			}
+			application.InvokeAsync(func() {
+				if closing.Load() || label == lastLabel {
+					return
+				}
+				lastLabel = label
 				update.SetLabel(label).SetHidden(label == "")
 				// The Windows tray builds its popup when the menu is set.
 				tray.SetMenu(menu)
@@ -229,23 +248,30 @@ func run() error {
 		update.OnClick(func(*application.Context) {
 			// Same path as the window's button; a failure keeps the app running.
 			if err := updateService.Apply(); err != nil {
-				setUpdate("")
 				show()
 				return
 			}
 			app.Quit()
 		})
-		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
+	started := make(chan struct{})
 	if serverMode {
 		// Server mode has no tray and never emits ApplicationStarted.
-		go updates.Run(ctx, updateService, updateReady)
+		close(started)
 	} else {
 		// The tray menu can be rebuilt only once the application is running.
 		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-			go updates.Run(ctx, updateService, updateReady)
+			close(started)
 		})
 	}
+	background.Go(func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-started:
+			updates.Run(ctx, updateService)
+		}
+	})
 	return app.Run()
 }
 

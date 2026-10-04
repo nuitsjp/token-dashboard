@@ -1,7 +1,6 @@
 import { Button, Card, Group, Text, Title } from '@mantine/core';
 import { useUpdates } from '../../features/updates/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
-import { publicError } from '../../shared/errors';
 
 // Shown only while a verified installer of a newer version is staged.
 export function UpdateApp() {
@@ -18,6 +17,6 @@ export function UpdateApp() {
       </Group>
       {!untrusted && <Button loading={update.apply.isPending} onClick={() => update.apply.mutate()}>Update and restart</Button>}
     </Group>
-    {update.apply.error && publicError(update.apply.error).code !== 'UPDATE_UNTRUSTED' && <ErrorNotice error={update.apply.error} />}
+    {!untrusted && <ErrorNotice error={status.applyError} />}
   </Card>;
 }

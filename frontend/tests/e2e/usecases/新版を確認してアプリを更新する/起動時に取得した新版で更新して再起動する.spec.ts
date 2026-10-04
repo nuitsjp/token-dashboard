@@ -80,7 +80,7 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
       expect(installedVersion()).toBe('0.1.0');
       expect(runKey()).toBe(`"${installedExe}"`);
       launch(installedExe, env);
-      oldPid = (await waitFor('the app to start', () => appProcesses(installedExe)))[0];
+      oldPid = await waitFor('the app to start', () => appProcesses(installedExe)[0]);
       launch(installedExe, env); // shows the window before the check finishes
     });
     await test.step('手順1', async () => {
@@ -99,7 +99,10 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
     });
     await test.step('手順3', async () => {
       launch(installedExe, env);
-      const window = windowState(oldPid);
+      const window = await waitFor('the Display page', () => {
+        const current = windowState(oldPid);
+        return current.names.includes('Style') && current;
+      });
       expect(window.title).toBe('Token Dashboard v0.1.0');
       expect(window.text).toContain('Version 0.2.0 is ready to install.');
       expect(window.names).toContain('Update and restart');
@@ -116,14 +119,23 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
     });
     await test.step('手順6', async () => {
       launch(installedExe, env);
-      const window = windowState(appProcesses(installedExe)[0]);
+      const window = await waitFor('the new version Display page', () => {
+        const current = windowState(appProcesses(installedExe)[0]);
+        return current.title === 'Token Dashboard v0.2.0' && current.names.includes('Style') && current;
+      });
       expect(window.title).toBe('Token Dashboard v0.2.0');
       expect(window.names).toContain('Style');
       expect(window.names).not.toContain('Update and restart');
     });
     await test.step('受け入れ条件', async () => {
       // The update kept the saved connection, and the same version is not staged again.
-      expect(windowState(appProcesses(installedExe)[0]).hubURL).toBe(hubURL);
+      const pid = appProcesses(installedExe)[0];
+      pressButton(pid, 'Connection');
+      const window = await waitFor('the saved connection', () => {
+        const current = windowState(pid);
+        return current.hubURL === hubURL && current;
+      });
+      expect(window.hubURL).toBe(hubURL);
       const updates = join(dataDir, 'updates');
       expect(existsSync(updates) ? readdirSync(updates) : []).toEqual([]);
     });

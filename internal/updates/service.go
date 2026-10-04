@@ -22,18 +22,30 @@ import (
 
 const ProgressEvent = "updates:progress"
 
+const (
+	PhaseIdle        = "idle"
+	PhaseChecking    = "checking"
+	PhaseChecked     = "checked"
+	PhaseDownloading = "downloading"
+	PhaseReady       = "ready"
+	PhaseFailed      = "failed"
+	PhaseUntrusted   = "untrusted"
+	PhaseHandedOff   = "handed-off"
+)
+
 type Config struct {
 	AppID, Version, Arch, Source, PublicKey, CacheDir string
 	Enabled                                           bool
 }
 type Status struct {
-	Configured bool   `json:"configured"`
-	Available  bool   `json:"available"`
-	Version    string `json:"version"`
-	Notes      string `json:"notes"`
-	Phase      string `json:"phase"`
-	Downloaded int64  `json:"downloaded"`
-	Total      int64  `json:"total"`
+	Configured bool         `json:"configured"`
+	Available  bool         `json:"available"`
+	Version    string       `json:"version"`
+	Notes      string       `json:"notes"`
+	Phase      string       `json:"phase"`
+	Downloaded int64        `json:"downloaded"`
+	Total      int64        `json:"total"`
+	ApplyError *fault.Error `json:"applyError,omitempty"`
 }
 type Service struct {
 	cfg         Config
@@ -45,13 +57,14 @@ type Service struct {
 	client      *http.Client
 	state       *appstate.State
 	logger      *slog.Logger
-	publish     func(string, any)
+	onStatus    func(Status)
 	launch      func(string) error
 	approveQuit func()
 }
 
-func New(cfg Config, state *appstate.State, logger *slog.Logger, publish func(string, any), launch func(string) error, approveQuit func()) *Service {
-	return &Service{cfg: cfg, state: state, logger: logger, publish: publish, launch: launch, approveQuit: approveQuit, client: newHTTPClient(), status: Status{Configured: cfg.Source != "" && cfg.PublicKey != "", Phase: "idle"}}
+// onStatus receives the same status exposed to the window by GetStatus. It must not block.
+func New(cfg Config, state *appstate.State, logger *slog.Logger, onStatus func(Status), launch func(string) error, approveQuit func()) *Service {
+	return &Service{cfg: cfg, state: state, logger: logger, onStatus: onStatus, launch: launch, approveQuit: approveQuit, client: newHTTPClient(), status: Status{Configured: cfg.Source != "" && cfg.PublicKey != "", Phase: PhaseIdle}}
 }
 func (s *Service) GetStatus() Status { s.mu.Lock(); defer s.mu.Unlock(); return s.status }
 func (s *Service) acquire() (func(), error) {
@@ -63,31 +76,37 @@ func (s *Service) acquire() (func(), error) {
 	s.busy = true
 	return func() { s.mu.Lock(); s.busy = false; s.mu.Unlock() }, nil
 }
-func (s *Service) report(phase string, downloaded, total int64) {
+func (s *Service) updateStatus(change func(*Status)) {
 	s.mu.Lock()
-	s.status.Phase = phase
-	s.status.Downloaded = downloaded
-	s.status.Total = total
+	change(&s.status)
 	status := s.status
 	s.mu.Unlock()
-	s.publish(ProgressEvent, status)
+	s.onStatus(status)
 }
-func (s *Service) Check(ctx context.Context) (status Status, err error) {
+func (s *Service) report(phase string, downloaded, total int64) {
+	s.updateStatus(func(status *Status) {
+		status.Phase = phase
+		status.Downloaded = downloaded
+		status.Total = total
+		status.ApplyError = nil
+	})
+}
+func (s *Service) check(ctx context.Context) (status Status, err error) {
 	defer func() { err = fault.Boundary(s.logger, "updates.check", err) }()
 	release, err := s.acquire()
 	if err != nil {
 		return status, err
 	}
 	defer release()
+	defer func() {
+		if err != nil {
+			s.report(PhaseFailed, 0, 0)
+		}
+	}()
 	if s.cfg.Source == "" || s.cfg.PublicKey == "" {
 		return status, fault.New("UPDATE_NOT_CONFIGURED", "更新元と公開鍵が設定されていません。")
 	}
-	s.report("checking", 0, 0)
-	defer func() {
-		if err != nil {
-			s.report("failed", 0, 0)
-		}
-	}()
+	s.report(PhaseChecking, 0, 0)
 	key, err := base64.StdEncoding.DecodeString(s.cfg.PublicKey)
 	if err != nil || len(key) != ed25519.PublicKeySize {
 		return status, fault.New("UPDATE_CONFIGURATION", "更新用公開鍵が不正です。")
@@ -114,20 +133,21 @@ func (s *Service) Check(ctx context.Context) (status Status, err error) {
 		return status, err
 	}
 	s.mu.Lock()
-	s.status = Status{Configured: true, Available: cmp > 0, Version: m.Version, Notes: m.Notes, Phase: "checked"}
 	s.manifest = &m
 	// A new check invalidates any earlier staged installer.
 	oldStage := s.staged
 	s.staged = ""
-	status = s.status
 	s.mu.Unlock()
 	if oldStage != "" {
 		os.Remove(oldStage)
 		os.Remove(filepath.Dir(oldStage))
 	}
-	return status, nil
+	s.updateStatus(func(status *Status) {
+		*status = Status{Configured: true, Available: cmp > 0, Version: m.Version, Notes: m.Notes, Phase: PhaseChecked}
+	})
+	return s.GetStatus(), nil
 }
-func (s *Service) Download(ctx context.Context) (status Status, err error) {
+func (s *Service) download(ctx context.Context) (status Status, err error) {
 	defer func() { err = fault.Boundary(s.logger, "updates.download", err) }()
 	release, err := s.acquire()
 	if err != nil {
@@ -141,6 +161,11 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 	if m == nil || !available {
 		return status, fault.New("UPDATE_NOT_CHECKED", "先に新版の有無を確認してください。")
 	}
+	defer func() {
+		if err != nil {
+			s.report(PhaseFailed, 0, m.Size)
+		}
+	}()
 	if err = os.MkdirAll(s.cfg.CacheDir, 0700); err != nil {
 		return status, err
 	}
@@ -152,7 +177,6 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 	defer func() {
 		if err != nil {
 			os.RemoveAll(stageDir)
-			s.report("failed", 0, m.Size)
 		}
 	}()
 	source, err := openSource(ctx, s.client, s.cfg.Source, m.Filename)
@@ -169,7 +193,7 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 	writer := io.MultiWriter(target, h)
 	limited := io.LimitReader(source, m.Size+1)
 	buf := make([]byte, 64*1024)
-	s.report("downloading", 0, m.Size)
+	s.report(PhaseDownloading, 0, m.Size)
 	for {
 		if err = ctx.Err(); err != nil {
 			break
@@ -186,7 +210,7 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 				err = io.ErrShortWrite
 				break
 			}
-			s.report("downloading", copied, m.Size)
+			s.report(PhaseDownloading, copied, m.Size)
 		}
 		if errors.Is(readErr, io.EOF) {
 			break
@@ -216,29 +240,38 @@ func (s *Service) Download(ctx context.Context) (status Status, err error) {
 		os.Remove(previous)
 		os.Remove(filepath.Dir(previous))
 	}
-	s.report("ready", copied, m.Size)
+	s.report(PhaseReady, copied, m.Size)
 	return s.GetStatus(), nil
 }
 
 // Run checks once for a newer release and stages its installer in the
 // background. A failure is only logged; the next startup checks again.
-func Run(ctx context.Context, s *Service, onReady func(version string)) {
+func Run(ctx context.Context, s *Service) {
 	// Leftovers from a download interrupted by exit are never trusted.
 	os.RemoveAll(s.cfg.CacheDir)
-	status, err := s.Check(ctx)
+	status, err := s.check(ctx)
 	if err == nil && status.Available {
-		status, err = s.Download(ctx)
+		_, err = s.download(ctx)
 	}
 	if err != nil {
 		s.logger.Warn("update_not_staged", "code", fault.Public(err).Code)
-		return
-	}
-	if status.Phase == "ready" {
-		onReady(status.Version)
 	}
 }
 func (s *Service) Apply() (err error) {
-	defer func() { err = fault.Boundary(s.logger, "updates.apply", err) }()
+	defer func() {
+		err = fault.Boundary(s.logger, "updates.apply", err)
+		if err != nil {
+			s.updateStatus(func(status *Status) {
+				if status.Phase == PhaseHandedOff {
+					return
+				}
+				status.ApplyError = fault.Public(err)
+				if status.ApplyError.Code == "UPDATE_UNTRUSTED" {
+					status.Phase = PhaseUntrusted
+				}
+			})
+		}
+	}()
 	release, err := s.acquire()
 	if err != nil {
 		return err
@@ -248,9 +281,12 @@ func (s *Service) Apply() (err error) {
 		return fault.New("DESKTOP_ONLY", "更新の適用はWindowsデスクトップ版で実行してください。")
 	}
 	s.mu.Lock()
-	path, m := s.staged, s.manifest
+	path, m, phase := s.staged, s.manifest, s.status.Phase
 	s.mu.Unlock()
-	if path == "" || m == nil {
+	if phase == PhaseUntrusted {
+		return fault.New("UPDATE_UNTRUSTED", "適用前の再検証に失敗しました。")
+	}
+	if path == "" || m == nil || phase != PhaseReady {
 		return fault.New("UPDATE_NOT_READY", "更新ファイルを先に取得してください。")
 	}
 	if err = s.state.PrepareExit(); err != nil {
@@ -263,18 +299,8 @@ func (s *Service) Apply() (err error) {
 	}()
 	// Check again immediately before execution; a successful download is not a
 	// permanent trust decision about a mutable file on disk.
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	h := sha256.New()
-	n, err := io.Copy(h, io.LimitReader(f, m.Size+1))
-	f.Close()
-	if err != nil {
-		return err
-	}
-	if n != m.Size || !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), m.SHA256) {
-		s.report("untrusted", 0, m.Size)
+	if err := verifyInstaller(path, m); err != nil {
+		s.logger.Warn("update_reverification_failed", "cause", err)
 		return fault.New("UPDATE_UNTRUSTED", "適用前の再検証に失敗しました。")
 	}
 	if s.launch == nil {
@@ -283,7 +309,24 @@ func (s *Service) Apply() (err error) {
 	if err = s.launch(path); err != nil {
 		return fmt.Errorf("could not launch installer: %w", err)
 	}
-	s.report("handed-off", m.Size, m.Size)
+	s.report(PhaseHandedOff, m.Size, m.Size)
 	s.approveQuit()
+	return nil
+}
+
+func verifyInstaller(path string, m *Manifest) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, m.Size+1))
+	if err != nil {
+		return err
+	}
+	if n != m.Size || !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), m.SHA256) {
+		return errors.New("installer size or hash changed")
+	}
 	return nil
 }
