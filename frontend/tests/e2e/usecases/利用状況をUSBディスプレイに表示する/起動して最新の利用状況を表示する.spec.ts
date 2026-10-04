@@ -132,9 +132,9 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
     });
     let first = '';
     await test.step('手順2', async () => {
-      const before = await preview(page);
       hub.send('snapshot', stats(12));
-      await expect.poll(() => preview(page)).not.toBe(before);
+      // Waiting for the tokens, not just a new image: the app may still swap "Waiting for local usage" for "Waiting for Hub" after the start.
+      await expect.poll(async () => inked(page, await preview(page), tokensStrip)).toBeGreaterThan(500);
       first = await preview(page);
       // Tokens run across the top. Below them, alpha (12% left, so danger) and beta (80%, normal)
       // each have a panel; gamma has no meter and takes none.
