@@ -138,7 +138,6 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       hub.send('snapshot', stats(12));
       await page.getByRole('link', { name: 'Display' }).click();
     });
-    let gauges = '';
     let requests = 0;
     await test.step('手順1', async () => {
       // Output sits at the right end of the row of the page heading, above the Style card.
@@ -150,7 +149,7 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       expect(output1!.y).toBeLessThan(style1!.y);
       await expect(style()).toHaveValue('Gauges');
       await expect.poll(async () => (await preview(page)).length).toBeGreaterThan(5000);
-      gauges = await preview(page);
+      const gauges = await preview(page);
       const shown = await colours(page, gauges);
       expect(shown.alphaBarStart).not.toEqual(danger);
       requests = hub.requests.length;
@@ -160,14 +159,15 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
       await style().click();
       await page.getByRole('option', { name: 'Bars' }).click();
-      await expect.poll(() => preview(page)).not.toBe(gauges);
       await expect(page.getByText('Saved.')).toHaveCount(0);
-      const shown = await colours(page, await preview(page));
-      expect(shown.divider).toEqual(line);
-      expect(shown.alphaBarStart).toEqual(danger);
-      expect(shown.alphaBarMiddle).toEqual(line);
-      expect(shown.betaBarStart).toEqual(normal);
-      expect(shown.betaBarEnd).toEqual(line);
+      // A snapshot or timed redraw can change the image before the style is applied.
+      await expect.poll(async () => colours(page, await preview(page))).toMatchObject({
+        divider: line,
+        alphaBarStart: danger,
+        alphaBarMiddle: line,
+        betaBarStart: normal,
+        betaBarEnd: line,
+      });
       await expect.poll(() => file().limitStyle).toBe('Bars');
       expect(hub.requests.length).toBe(requests);
       expect(hub.streams()).toBe(1);
@@ -222,12 +222,10 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       expect(ordered.secondColumnTop).toEqual(normal);
       expect(ordered.fourthColumnTop).toEqual(normal);
       // Choosing Gauges again saves it, draws the gauges and leaves the connection as it was.
-      const bars = await preview(page);
       await style().click();
       await page.getByRole('option', { name: 'Gauges' }).click();
-      await expect.poll(() => preview(page)).not.toBe(bars);
+      await expect.poll(async () => (await colours(page, await preview(page))).firstColumnTop).not.toEqual(danger);
       await expect.poll(() => file().limitStyle).toBe('Gauges');
-      expect((await colours(page, await preview(page))).firstColumnTop).not.toEqual(danger);
       expect(file().source).toBe('Hub');
       expect(file().connection).toBeTruthy();
     });
