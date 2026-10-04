@@ -29,7 +29,7 @@ const meter = (kind: string, label: string, remaining: number, resetHours: numbe
 const contract = (provider: string, plan: string, ...windows: ReturnType<typeof meter>[]) =>
   ({ provider, accountLabel: `${provider}@example.com`, planLabel: plan, windows });
 
-// Seven contracts of one circle each fit by reducing the margins, in the order of the lowest
+// Seven contracts of one circle each fit on the seven columns, in the order of the lowest
 // remaining percent of the windows that are drawn: alpha (10, red; 90 without its 5-hour), beta (45),
 // c1 to c4 (50) and zulu (79). Only zulu is drawn in caution, by the pace rule (200 hours to reset
 // exceeds the week), so the caution colour shows when zulu is drawn. Only alpha's 5-hour is drawn in
