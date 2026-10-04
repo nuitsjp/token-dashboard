@@ -30,12 +30,14 @@ var (
 )
 
 const (
-	cellWidth  = 240
-	cellGap    = 12
-	panelTop   = 30
-	panelGap   = 14
-	gaugesLeft = 40
-	panelPad   = 10
+	// Usage Limits sit on a grid of gaugeColumns equal columns between the outer margins. A circle takes
+	// one column and a panel takes as many as it has circles, so a circle never moves with the count.
+	gaugeColumns     = 7
+	gaugesMargin     = 8
+	gaugeColumnWidth = (Width - 2*gaugesMargin) / gaugeColumns
+	panelTop         = 30
+	panelGap         = 14
+	panelPad         = 10
 	// Today, Month and All run across the top; the panels keep the same margin above and below.
 	tokenStrip = 56
 )
@@ -193,31 +195,21 @@ func panels(limits usage.Limits) []panel {
 	return out
 }
 
-func (p panel) width() int { return len(p.circles)*cellWidth + (len(p.circles)-1)*cellGap + 2*panelPad }
+func (p panel) width() int { return len(p.circles)*gaugeColumnWidth - panelGap }
 
-// gauges keeps the default margins unless reducing them fits more whole contracts.
-// A panel that does not fit even without margins, and every one after it, is not shown.
+// gauges puts each contract, in order, on the leftmost free columns. A contract with more circles than
+// there are free columns is skipped, and the next one is tried.
 func (r *Renderer) gauges(img *image.RGBA, stats *usage.Stats, now time.Time) {
 	r.tokenStrip(img, stats.Periods)
 	top := panelTop + tokenStrip
 	height := Height - top - panelTop
-	ps := panels(stats.Limits)
-	width, count := 0, 0
-	for _, p := range ps {
-		next := width + p.width()
-		if count > 0 {
-			next += panelGap
+	col := 0
+	for _, p := range panels(stats.Limits) {
+		if col+len(p.circles) > gaugeColumns {
+			continue
 		}
-		if next > Width {
-			break
-		}
-		width = next
-		count++
-	}
-	x := min(gaugesLeft, (Width-width)/2)
-	for _, p := range ps[:count] {
-		r.panel(img, p, x, top, height, now)
-		x += p.width() + panelGap
+		r.panel(img, p, gaugesMargin+col*gaugeColumnWidth+panelGap/2, top, height, now)
+		col += len(p.circles)
 	}
 }
 
@@ -240,7 +232,7 @@ func (r *Renderer) panel(img *image.RGBA, p panel, x, top, height int, now time.
 		r.text(img, plan, dim, px, base, truncate(plan, p.plan, x+w-panelPad-px))
 	}
 	for i, c := range p.circles {
-		cellX := x + panelPad + i*(cellWidth+cellGap)
+		cellX := x - panelGap/2 + i*gaugeColumnWidth
 		r.circle(img, c, p.groups > 1, cellX, top, height, now)
 	}
 }
@@ -252,11 +244,11 @@ func (r *Renderer) circle(img *image.RGBA, c circle, showGroup bool, cellX, pane
 	// the first, smaller cell. The block of circle and rows is centred vertically below the heading.
 	const blockPerK = 182 + (44+32+8)/0.92
 	avail := float64(height - headerHeight - panelPad)
-	k := min(float64(cellWidth-16)/200, avail/blockPerK)
+	k := min(float64(gaugeColumnWidth-16)/200, avail/blockPerK)
 	u := k / 0.92
 	block := blockPerK * k
 	top := panelY + headerHeight + (height-headerHeight-panelPad-int(block))/2
-	ox, oy := float64(cellX)+(cellWidth-200*k)/2, float64(top)-2*k
+	ox, oy := float64(cellX)+(gaugeColumnWidth-200*k)/2, float64(top)-2*k
 	cx, cy := ox+100*k, oy+100*k
 	for i, w := range c.windows {
 		radius := 90 * k
@@ -287,7 +279,7 @@ func (r *Renderer) circle(img *image.RGBA, c circle, showGroup bool, cellX, pane
 	}
 	if showGroup && len(c.windows) > 0 {
 		face := r.face(false, math.Round(18*k))
-		g := truncate(face, groupOf(c.windows[0]), cellWidth-16)
+		g := truncate(face, groupOf(c.windows[0]), gaugeColumnWidth-16)
 		y := 190.0
 		if len(c.windows) == 2 {
 			y = 186
@@ -319,7 +311,7 @@ func (r *Renderer) tokenStrip(img *image.RGBA, periods usage.Periods) {
 		period usage.Period
 	}{{"Today", periods.Today}, {"Month", periods.Month}, {"All", periods.AllTime}}
 	label, cost, tokens := r.face(false, 20), r.face(false, 22), r.face(true, 34)
-	x, base := gaugesLeft, panelTop+34
+	x, base := gaugesMargin+panelGap/2, panelTop+34
 	for _, b := range blocks {
 		r.text(img, label, dim, x, base, b.label)
 		x += measure(label, b.label) + 14

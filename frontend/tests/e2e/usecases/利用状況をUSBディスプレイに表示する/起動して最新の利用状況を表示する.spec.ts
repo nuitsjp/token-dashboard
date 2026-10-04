@@ -17,9 +17,9 @@ const normal: Rgb = [116, 102, 224]; // violet
 const danger: Rgb = [240, 97, 109];
 const caution: Rgb = [250, 178, 25];
 // [left, top, right, bottom] of the first panel (one circle) and of the second panel of ranked().
-const firstPanel = [40, 86, 300, 432] as const;
-const secondPanel = [314, 86, 1102, 432] as const;
-const tokensStrip = [40, 30, 1880, 66] as const;
+const firstPanel = [15, 86, 273, 432] as const;
+const secondPanel = [287, 86, 1089, 432] as const;
+const tokensStrip = [15, 30, 1880, 66] as const;
 const wholeImage = [0, 0, 1920, 462] as const;
 const panelRow = 90; // just below the top edge of the panels, where only the fill is
 
@@ -139,6 +139,8 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       // Tokens run across the top. Below them, alpha (12% left, so danger) and beta (80%, normal)
       // each have a panel; gamma has no meter and takes none.
       expect(await inked(page, first, tokensStrip)).toBeGreaterThan(500);
+      // The Tokens start at the left edge of the first panel, with nothing to the left of it.
+      expect(await inked(page, first, [0, 30, 15, 66])).toBe(0);
       expect((await look(page, first, wholeImage, panelFill)).runs).toBe(2);
       expect((await look(page, first, firstPanel, danger)).count).toBeGreaterThan(100);
       expect((await look(page, first, secondPanel, normal)).count).toBeGreaterThan(100);
@@ -181,21 +183,20 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       // The image is drawn again without anything from the Hub when the shown minutes change.
       await expect.poll(() => preview(page), { timeout: 10_000, intervals: [250] }).not.toBe(current);
       await expect(page.getByText(token)).toHaveCount(0);
-      // Lowest remaining first, left to right: one (10%, danger) takes the first panel and three
-      // (30%, caution) the second. Four needs more width than is left, so it and every contract
-      // after it are not shown.
+      // Lowest remaining first, left to right: one (10%, danger) takes the first column and three
+      // (30%, caution) the next three. Four, late and last need four columns and only three are left, so
+      // they are skipped; unknown, which reports no percent and comes last, takes the one column left.
       hub.send('stats', ranked());
       await expect.poll(async () => (await look(page, await preview(page), secondPanel, caution)).count).toBeGreaterThan(100);
       const ordered = await preview(page);
-      expect((await look(page, ordered, wholeImage, panelFill)).runs).toBe(2);
+      expect((await look(page, ordered, wholeImage, panelFill)).runs).toBe(3);
       expect((await look(page, ordered, firstPanel, danger)).count).toBeGreaterThan(100);
       expect((await look(page, ordered, secondPanel, danger)).count).toBe(0);
 
       // At y=140 only the panel fill crosses the row. Include the one-pixel border on each side.
       const panelBounds = async () => (await look(page, await preview(page), wholeImage, panelFill, 140))
         .ranges.map(([left, right]) => [left - 1, right + 1]);
-      // Reducing the margins cannot fit the next ranked contract, so the default remains.
-      expect(await panelBounds()).toEqual([[40, 300], [314, 1078]]);
+      expect(await panelBounds()).toEqual([[15, 273], [287, 1089], [1103, 1361]]);
 
       const layoutStats = (circles: number[]) => ({
         ...stats(12),
@@ -214,19 +215,22 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
         await expect.poll(panelBounds).toEqual(bounds);
       };
 
-      // Six separate contracts keep 40px margins; seven use equal 8px margins without shrinking panels.
-      const six = Array.from({ length: 6 }, (_, i) => [40 + i * 274, 300 + i * 274]);
-      const seven = Array.from({ length: 7 }, (_, i) => [8 + i * 274, 268 + i * 274]);
+      // A circle takes one 272px column and a panel keeps the same columns however many contracts are shown.
+      const single = (count: number) => Array.from({ length: count }, (_, i) => [15 + i * 272, 273 + i * 272]);
+      const six = single(6);
+      const seven = single(7);
       await showLayout([1, 1, 1, 1, 1, 1], six);
       await showLayout([1, 1, 1, 1, 1, 1, 1], seven);
       // An eighth contract is omitted, and returning to seven may produce the identical image.
       await showLayout([1, 1, 1, 1, 1, 1, 1, 1], seven);
       await showLayout([1, 1, 1, 1, 1, 1, 1], seven);
       await showLayout([1, 1, 1, 1, 1, 1], six);
-      // Seven circles in five contracts use 30px margins and retain 512px/260px panel widths.
-      await showLayout([2, 2, 1, 1, 1], [[30, 542], [556, 1068], [1082, 1342], [1356, 1616], [1630, 1890]]);
-      // A first contract wider than the whole image prevents later smaller contracts from being drawn.
-      await showLayout([8, 1], []);
+      // Seven circles in five contracts take columns 0-1, 2-3, 4, 5 and 6.
+      await showLayout([2, 2, 1, 1, 1], [[15, 545], [559, 1089], [1103, 1361], [1375, 1633], [1647, 1905]]);
+      // A contract of more than seven circles is skipped and the next one is drawn.
+      await showLayout([8, 1], [[15, 273]]);
+      // A contract that does not fit the free columns is skipped too, and a later smaller one is drawn.
+      await showLayout([3, 3, 2, 1], [[15, 817], [831, 1633], [1647, 1905]]);
     });
   } finally {
     await server.stop();
