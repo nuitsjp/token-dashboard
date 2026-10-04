@@ -6,7 +6,11 @@ import wails from '@wailsio/runtime/plugins/vite';
 
 export default defineConfig(({ mode }) => {
   return {
-    plugins: [{ name: 'app-csp', transformIndexHtml: (html: string) => html.replace('__SCRIPT_SRC__', mode === 'production' ? "'self'" : "'self' 'unsafe-inline'").replace('__CONNECT_SRC__', mode === 'production' ? "'self'" : "'self' ws://127.0.0.1:* http://127.0.0.1:*") }, tanstackRouter({ target: 'react', autoCodeSplitting: false }), react(), wails('./bindings')],
+    plugins: [{ name: 'app-csp', transformIndexHtml: (html: string) => html.replace('__SCRIPT_SRC__', mode === 'production' ? "'self'" : "'self' 'unsafe-inline'").replace('__CONNECT_SRC__', mode === 'production' ? "'self'" : "'self' ws://127.0.0.1:* http://127.0.0.1:*") }, {
+      // A clean checkout needs this file for Go's embedded assets before the first build.
+      name: 'keep-dist-directory',
+      generateBundle() { this.emitFile({ type: 'asset', fileName: '.gitkeep', source: '' }); },
+    }, tanstackRouter({ target: 'react', autoCodeSplitting: false }), react(), wails('./bindings')],
     resolve: { alias: [
       { find: '@bindings', replacement: fileURLToPath(new URL('./bindings', import.meta.url)) },
     ] },

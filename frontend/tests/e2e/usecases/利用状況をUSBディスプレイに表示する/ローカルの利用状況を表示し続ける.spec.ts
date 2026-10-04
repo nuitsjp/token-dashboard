@@ -117,9 +117,9 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
     });
 
     await test.step('手順4', async () => {
-      // Without log changes, only the limits are read again.
+      // Limits are read independently of the periodic graph, and unchanged totals stay the same.
       await expect.poll(() => tokscale!.runs('usage --json').filter(run => run.start > idleFrom).length, { timeout: poll * 10 }).toBeGreaterThanOrEqual(1);
-      expect(tokscale!.runs('graph --no-spinner').filter(run => run.start > idleFrom)).toEqual([]);
+      expect(tokscale!.runs('cursor sync --json').filter(run => run.start > idleFrom)).toEqual([]);
       const idle = await inspect(page);
       expect([idle.today, idle.month, idle.all]).toEqual([shown.today, shown.month, shown.all]);
     });

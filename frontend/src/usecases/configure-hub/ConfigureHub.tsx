@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { ErrorNotice } from '../../shared/ErrorNotice';
-import { automatic, useSettingsDraft } from './SettingsDraft';
+import { getSettings, useDisplays } from '../../features/settings/queries';
+import { publicError } from '../../shared/errors';
+import { useDisplayChanges, useSettingsDraft } from './SettingsDraft';
 import styles from './ConfigureHub.module.css';
 
 function Row({ title, hint, children }: { title: ReactNode; hint?: string; children: ReactNode }) {
@@ -15,7 +18,7 @@ function SaveBar() {
   const draft = useSettingsDraft();
   if (!draft) return null;
   return <>
-    <ErrorNotice error={draft.errorFor('connection')} />
+    <ErrorNotice error={draft.error} />
     {draft.done && !draft.connectionDirty && <Alert color="green" py="xs" mt="sm">Saved.</Alert>}
     <Group justify="flex-end" mt="md" pt="md" className={styles.bar}>
       <Button loading={draft.saving} onClick={draft.submitConnection}>Save</Button>
@@ -51,21 +54,24 @@ export function ConnectionSettings() {
 
 // The style choice sits right of the Style title. It applies and saves at once.
 export function StyleSelect() {
-  const draft = useSettingsDraft();
-  if (!draft) return null;
-  return <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
-    onChange={value => { if (value) draft.setStyle(value); }} />;
-}
-
-export function StyleError() {
-  const draft = useSettingsDraft();
-  return draft ? <ErrorNotice error={draft.errorFor('display')} /> : null;
+  const settings = useQuery(getSettings());
+  const { style } = useDisplayChanges();
+  if (!settings.data) return null;
+  return <Stack gap={4}>
+    <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={style.isPending ? style.variables : settings.data.limitStyle}
+      allowDeselect={false} disabled={style.isPending} error={style.error ? publicError(style.error).fieldErrors?.limitStyle : undefined}
+      onChange={value => { if (value) style.mutate(value); }} />
+    <ErrorNotice error={style.error} />
+  </Stack>;
 }
 
 export function DisplaySettings() {
-  const draft = useSettingsDraft();
-  if (!draft) return null;
-  const displays = draft.saved.displays ?? [];
+  const settings = useQuery(getSettings());
+  const devices = useDisplays();
+  const { display } = useDisplayChanges();
+  if (!settings.data) return null;
+  const automatic = '__automatic__';
+  const displays = devices.data ?? [];
   const options = [
     { value: automatic, label: 'Automatic' },
     ...displays.map(d => ({ value: d.deviceID, label: d.connected ? d.name : `${d.name} (Disconnected)` })),
@@ -73,9 +79,12 @@ export function DisplaySettings() {
   return <Stack gap={4} align="flex-end">
     <Group wrap="nowrap" gap="sm">
       <Title order={5}>Output</Title>
-      <Select w={280} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
-        onChange={value => { if (value) draft.setDisplay(value); }} />
+      <Select w={280} aria-label="Output device" data={options} value={(display.isPending ? display.variables : settings.data.displayID) || automatic}
+        allowDeselect={false} disabled={display.isPending} error={display.error ? publicError(display.error).fieldErrors?.displayID : undefined}
+        onDropdownOpen={() => { void devices.refetch(); }}
+        onChange={value => { if (value) display.mutate(value === automatic ? '' : value); }} />
     </Group>
-    {displays.length === 0 && <Text size="xs" c="dimmed">No TURZX display is connected.</Text>}
+    <ErrorNotice error={devices.error ?? display.error} />
+    {devices.data && displays.length === 0 && <Text size="xs" c="dimmed">No TURZX display is connected.</Text>}
   </Stack>;
 }

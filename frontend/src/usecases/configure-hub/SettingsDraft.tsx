@@ -1,76 +1,61 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { View } from '@bindings/token-monitor-turzx/internal/settings/models';
-import { getSettings, useSaveSettings } from '../../features/settings/queries';
+import { getSettings, useSaveConnection, useSetDisplay, useSetLimitStyle } from '../../features/settings/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { publicError } from '../../shared/errors';
 import { useDraftDirty } from '../../shared/ExitContext';
 
-type Scope = 'connection' | 'display';
-type DisplayChange = { display?: string; style?: string };
-export const automatic = '__automatic__';
-
-function useDraft(saved: View) {
-  const save = useSaveSettings();
-  const [source, setSource] = useState(saved.source || 'Local');
+function useConnectionDraft(saved: View) {
+  const save = useSaveConnection();
+  const [source, setSource] = useState(saved.source);
   const [url, setURL] = useState(saved.url);
   const [token, setToken] = useState('');
-  const [pending, setPending] = useState<DisplayChange>({});
   const [done, setDone] = useState(false);
-  const [failed, setFailed] = useState<Scope | null>(null);
-  const connectionDirty = source !== (saved.source || 'Local') || (source === 'Hub' && (url !== saved.url || token !== ''));
+  const connectionDirty = source !== saved.source || (source === 'Hub' && (url !== saved.url || token !== ''));
   useDraftDirty(connectionDirty);
   const edit = <T,>(set: (value: T) => void) => (value: T) => { set(value); setDone(false); };
-  // The Connection page saves with its Save button. The other page's saved values are sent as they are.
   async function submitConnection() {
     setDone(false);
-    setFailed(null);
     try {
-      const view = await save.mutateAsync({ source, url, token, displayID: saved.displayID, limitStyle: saved.limitStyle });
-      setSource(view.source || 'Local');
-      setURL(view.url);
-      setToken('');
+      const view = await save.mutateAsync({ source, url, token });
+      setSource(current => current === source ? view.source : current);
+      setURL(current => current === url ? view.url : current);
+      setToken(current => current === token ? '' : current);
       setDone(true);
-    } catch { setFailed('connection'); }
-  }
-  // The Display page applies and saves a choice at once. A failed save leaves the saved value shown.
-  async function applyDisplay(change: DisplayChange) {
-    setPending(change);
-    setFailed(null);
-    try {
-      await save.mutateAsync({
-        source: saved.source || 'Local', url: saved.url, token: '',
-        displayID: change.display === undefined ? saved.displayID : change.display === automatic ? '' : change.display,
-        limitStyle: change.style ?? saved.limitStyle,
-      });
-    } catch { setFailed('display'); } finally { setPending({}); }
+    } catch { /* Keep the input and show the mutation error. */ }
   }
   return {
     saved, source, url, token, connectionDirty, done,
-    display: pending.display ?? (saved.displayID || automatic),
-    style: pending.style ?? (saved.limitStyle || 'Gauges'),
     setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken),
-    setDisplay: (display: string) => void applyDisplay({ display }),
-    setStyle: (style: string) => void applyDisplay({ style }),
     saving: save.isPending,
-    errorFor: (scope: Scope) => failed === scope ? save.error : null,
+    error: save.error,
     fields: save.error ? publicError(save.error).fieldErrors ?? {} : {},
     submitConnection: () => void submitConnection(),
   };
 }
 
-type Draft = ReturnType<typeof useDraft>;
+type Draft = ReturnType<typeof useConnectionDraft>;
 const Context = createContext<Draft | null>(null);
+type DisplayChanges = { display: ReturnType<typeof useSetDisplay>; style: ReturnType<typeof useSetLimitStyle> };
+const DisplayContext = createContext<DisplayChanges | null>(null);
 
 function Provider({ saved, children }: { saved: View; children: ReactNode }) {
-  return <Context.Provider value={useDraft(saved)}>{children}</Context.Provider>;
+  return <Context.Provider value={useConnectionDraft(saved)}>{children}</Context.Provider>;
 }
 
-// The draft spans the Display and Connection pages. Display choices save at once; Connection saves with its button.
+// Only Connection has an unsaved draft, kept while moving between the two pages.
 export function SettingsDraftProvider({ children }: { children: ReactNode }) {
   const settings = useQuery(getSettings());
-  if (settings.data) return <Provider saved={settings.data}>{children}</Provider>;
-  return <Context.Provider value={null}><ErrorNotice error={settings.error} />{children}</Context.Provider>;
+  const display = useSetDisplay();
+  const style = useSetLimitStyle();
+  // Immediate saves also span the pages, so pending work and failures survive navigation.
+  return <DisplayContext.Provider value={{ display, style }}>
+    {settings.data
+      ? <Provider saved={settings.data}>{children}</Provider>
+      : <Context.Provider value={null}><ErrorNotice error={settings.error} />{children}</Context.Provider>}
+  </DisplayContext.Provider>;
 }
 
 export const useSettingsDraft = () => useContext(Context);
+export const useDisplayChanges = () => useContext(DisplayContext)!;

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ type Intervals struct {
 	Settle time.Duration
 	// Graph is the least time between the starts of two graph runs.
 	Graph time.Duration
-	// Poll is the period of Cursor syncs and the wait before a failed graph runs again.
+	// Poll is the period of discovery graphs and Cursor syncs, and the wait before a failed graph runs again.
 	Poll time.Duration
 	// Limits is the period of usage limits, and the least time between two reads of them. The
 	// providers rate-limit these reads, so changes of the logs do not read them.
@@ -142,6 +143,9 @@ func (r *Reader) Run(ctx context.Context) {
 	l.syncWanted, l.graphWanted = true, true
 	l.requestUsage()
 	l.dispatch()
+	// A new tool can write outside every watched path, even when Cursor sync is off.
+	discovery := time.NewTicker(r.intervals.Poll)
+	defer discovery.Stop()
 	var settle, graphRetry <-chan time.Time
 	midnight := time.After(untilMidnight(time.Now()))
 	for {
@@ -159,6 +163,8 @@ func (r *Reader) Run(ctx context.Context) {
 			l.graphReady = nil
 		case <-graphRetry:
 			graphRetry = nil
+			l.graphWanted = true
+		case <-discovery.C:
 			l.graphWanted = true
 		case <-midnight:
 			midnight = time.After(untilMidnight(time.Now()))
@@ -224,7 +230,7 @@ func mergeLimits(previous *usage.Limits, next usage.Limits) usage.Limits {
 	for _, p := range next.Providers {
 		have[key(p)] = true
 	}
-	merged := usage.Limits{Providers: append([]usage.Provider(nil), next.Providers...)}
+	merged := usage.Limits{Providers: slices.Clone(next.Providers)}
 	for _, p := range previous.Providers {
 		if !have[key(p)] {
 			merged.Providers = append(merged.Providers, p)

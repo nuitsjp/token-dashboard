@@ -261,10 +261,10 @@ func TestChangesRunGraphAtMostOncePerIntervalWithoutOverlap(t *testing.T) {
 	}
 }
 
-func TestLimitsAreReadAgainEveryLimitsPeriodWithoutChanges(t *testing.T) {
+func TestPeriodicReadsKeepIntervalsWithoutPublishingUnchangedUsage(t *testing.T) {
 	t.Parallel()
 	f := newFakeTokscale(t)
-	_, stop := f.start(quiet())
+	state, stop := f.start(quiet())
 	time.Sleep(2*testIntervals.Limits + testIntervals.Limits/2)
 	stop()
 	limits := f.runs("usage --json")
@@ -277,8 +277,74 @@ func TestLimitsAreReadAgainEveryLimitsPeriodWithoutChanges(t *testing.T) {
 			t.Fatalf("usage %d started %v after the previous one, want about %v", i, gap, testIntervals.Limits)
 		}
 	}
-	if n := len(f.runs("graph --no-spinner")); n != 1 {
-		t.Fatalf("graph ran %d times without changes, want once", n)
+	if n := len(f.runs("graph --no-spinner")); n < 3 {
+		t.Fatalf("graph ran %d times in 2.5 periods after the start, want at least 3", n)
+	}
+	if n := len(f.runs("clients --json")); n != 1 {
+		t.Fatalf("clients ran %d times without new tools, want once", n)
+	}
+	select {
+	case <-state.Changed():
+		t.Fatal("unchanged usage was published again")
+	default:
+	}
+}
+
+func TestNewToolOutsideWatchedPathsIsFoundWithoutCursorSync(t *testing.T) {
+	for _, cursorError := range []string{"Not authenticated", "Cursor session expired"} {
+		t.Run(cursorError, func(t *testing.T) {
+			t.Parallel()
+			f := newFakeTokscale(t)
+			cursor, _ := json.Marshal(map[string]any{"synced": false, "error": cursorError})
+			f.write("cursor.json", string(cursor))
+			state, stop := f.start(quiet())
+
+			// Only the new tool's directory and the fake CLI responses change. The existing
+			// watched directory stays empty, so it cannot trigger discovery of this tool.
+			newLogs := filepath.Join(f.dir, "gemini")
+			if err := os.Mkdir(newLogs, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			f.write(filepath.Join("gemini", "session.jsonl"), "new tool usage")
+			previousPath, _ := json.Marshal(f.logs)
+			newPath, _ := json.Marshal(newLogs)
+			f.write("clients.json", `{"clients":[{"client":"claude","sessionsPath":`+string(previousPath)+`},{"client":"gemini","sessionsPath":`+string(newPath)+`}]}`)
+			today := time.Now().Format("2006-01-02")
+			f.write("graph.json", `{"summary":{"clients":["claude","gemini"]},"contributions":[{"date":"`+today+`","totals":{"cost":1.5},"tokenBreakdown":{"input":10}}]}`)
+			waitFor(t, 15*time.Second, "new tool usage without a watched change", func() bool {
+				return state.Latest().Periods.Today.TotalTokens == 10
+			})
+			// Starting a second graph after the rescan proves the first one's result
+			// was handled and saved. A child's recorded end precedes its process exit.
+			// Read the saved file only after stopping, so Windows can replace it freely.
+			waitFor(t, 15*time.Second, "the saved result after the new tool's scan", func() bool {
+				scans := f.runs("clients --json")
+				if len(scans) < 2 || scans[1].end.IsZero() {
+					return false
+				}
+				graphs := 0
+				for _, g := range f.runs("graph --no-spinner") {
+					if g.start.After(scans[1].end) {
+						graphs++
+					}
+				}
+				return graphs >= 2
+			})
+			stop()
+			saved, err := loadScan(f.scanFile())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(saved.Paths, newLogs) || !slices.Contains(saved.Clients, "gemini") {
+				t.Fatalf("new tool was not saved in scan locations: %+v", saved)
+			}
+			if n := len(f.runs("clients --json")); n != 2 {
+				t.Fatalf("clients ran %d times, want the initial scan and one new-tool scan", n)
+			}
+			if n := len(f.runs("cursor sync --json")); n != 1 {
+				t.Fatalf("cursor sync ran %d times, want once", n)
+			}
+		})
 	}
 }
 

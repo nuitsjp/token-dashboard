@@ -10,9 +10,16 @@ import (
 	"token-monitor-turzx/internal/turzx"
 )
 
+type outputConn interface {
+	SendJPEG([]byte) error
+	Restart() error
+	Close() error
+}
+
 // Output sends images to one TURZX in order. Only the newest pending image is kept.
 type Output struct {
 	target  func() (string, error)
+	open    func(string) (outputConn, error)
 	logger  *slog.Logger
 	pending chan *image.RGBA
 	done    chan struct{}
@@ -20,7 +27,11 @@ type Output struct {
 
 // NewOutput sends to the device ID that target returns at the time of each send.
 func NewOutput(target func() (string, error), logger *slog.Logger) *Output {
-	return &Output{target: target, logger: logger, pending: make(chan *image.RGBA, 1), done: make(chan struct{})}
+	return &Output{
+		target: target,
+		open:   func(id string) (outputConn, error) { return turzx.Open(id) },
+		logger: logger, pending: make(chan *image.RGBA, 1), done: make(chan struct{}),
+	}
 }
 
 // Submit replaces any image still waiting to be sent. It must be called from one goroutine.
@@ -35,7 +46,7 @@ func (o *Output) Submit(img *image.RGBA) {
 // Run sends until ctx ends, then restarts the display so it returns to its start-up screen.
 func (o *Output) Run(ctx context.Context) {
 	defer close(o.done)
-	var conn *turzx.Conn
+	var conn outputConn
 	var connID, lastFailure string
 	fail := func(event string, err error) {
 		// Log a failure once until it changes, not on every image.
@@ -68,7 +79,7 @@ func (o *Output) Run(ctx context.Context) {
 				if id == "" {
 					continue
 				}
-				if conn, err = turzx.Open(id); err != nil {
+				if conn, err = o.open(id); err != nil {
 					conn = nil
 					fail("turzx_open_failed", err)
 					continue

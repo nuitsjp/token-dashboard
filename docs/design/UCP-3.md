@@ -4,10 +4,10 @@
 
 | 役割 | 責務 | 実装パス（段階4完了時に記入） |
 | --- | --- | --- |
-| 更新区画 | 取得・検証済みの新版があるときだけ、版番号と適用ボタンを表示する。再検証の失敗を表示する | `frontend/src/usecases/update-app/UpdateApp.tsx` |
+| 更新区画 | 更新サービスの状態から版番号と適用ボタン、適用時の失敗を表示する。再検証の失敗では所定の警告を表示する | `frontend/src/usecases/update-app/UpdateApp.tsx` |
 | 機能アクセス | 本体の更新サービスから状態を取得し、状態変化の通知を画面の状態へ反映する。適用を呼び出す | `frontend/src/features/updates/queries.ts` |
-| 更新サービス | 起動時に1回、更新情報を取得して署名・対象・版を検証し、新版ならインストーラーを取得してサイズとハッシュを検証して置く。取得済みになったら画面とタスクトレイのメニューへ知らせる。適用時に再検証し、インストーラーを起動して終了を承認する。タスクトレイのメニュー項目は `main.go` が出し入れする | `internal/updates/service.go`、`internal/updates/manifest.go`、`internal/updates/install_windows.go`、`main.go` |
-| 更新元 | GitHub Releases の最新リリースから、`update.json` と同じリリースのインストーラーを HTTPS で読み出す。URL と公開鍵は `build/app.json` の `updateSource`・`updatePublicKey` に置く | `internal/updates/source.go` |
+| 更新サービス | 起動時に1回、更新情報を取得して署名・対象・版を検証し、新版ならインストーラーを取得してサイズとハッシュを検証して置く。状態と公開可能な適用エラーを持ち、同じ状態を `GetStatus` と状態変更の通知で渡す。`main.go` は通知を画面へ送り、取得済み状態に応じてタスクトレイのメニュー項目を出し入れする。適用時に再検証し、インストーラーを起動して終了を承認する。Wails に公開する操作は `GetStatus` と `Apply` に限る | `internal/updates/service.go`、`internal/updates/manifest.go`、`internal/updates/install_windows.go`、`main.go` |
+| 更新元 | GitHub Releases の最新リリースから `update.json` を HTTPS で読み出し、取得時のリダイレクト履歴にある版固定のリリース URL を保持する。インストーラーはその URL を基準に取得し、最新リリースを再解決しない。版固定の URL を得られなければ確認を失敗とする。URL と公開鍵は `build/app.json` の `updateSource`・`updatePublicKey` に置く | `internal/updates/source.go` |
 | 更新インストーラー | 旧プロセスの終了を待ってから、ファイル、アンインストール情報、サインイン時の自動起動の登録を更新し、新版を起動する | `build/windows/nsis/project.nsi` |
 | リリース準備 | インストーラーのサイズとハッシュを入れた更新情報を、リポジトリ外の秘密鍵で署名して `update.json` を作る | `cmd/release/main.go` |
 
