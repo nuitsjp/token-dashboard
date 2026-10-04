@@ -48,18 +48,19 @@ type Status struct {
 	ApplyError *fault.Error `json:"applyError,omitempty"`
 }
 type Service struct {
-	cfg         Config
-	mu          sync.Mutex
-	busy        bool
-	manifest    *Manifest
-	staged      string
-	status      Status
-	client      *http.Client
-	state       *appstate.State
-	logger      *slog.Logger
-	onStatus    func(Status)
-	launch      func(string) error
-	approveQuit func()
+	cfg             Config
+	mu              sync.Mutex
+	busy            bool
+	manifest        *Manifest
+	installerSource string
+	staged          string
+	status          Status
+	client          *http.Client
+	state           *appstate.State
+	logger          *slog.Logger
+	onStatus        func(Status)
+	launch          func(string) error
+	approveQuit     func()
 }
 
 // onStatus receives the same status exposed to the window by GetStatus. It must not block.
@@ -111,7 +112,7 @@ func (s *Service) check(ctx context.Context) (status Status, err error) {
 	if err != nil || len(key) != ed25519.PublicKeySize {
 		return status, fault.New("UPDATE_CONFIGURATION", "更新用公開鍵が不正です。")
 	}
-	reader, err := openSource(ctx, s.client, s.cfg.Source, ManifestName)
+	reader, installerSource, err := openSource(ctx, s.client, s.cfg.Source, ManifestName)
 	if err != nil {
 		return status, err
 	}
@@ -134,6 +135,7 @@ func (s *Service) check(ctx context.Context) (status Status, err error) {
 	}
 	s.mu.Lock()
 	s.manifest = &m
+	s.installerSource = installerSource
 	// A new check invalidates any earlier staged installer.
 	oldStage := s.staged
 	s.staged = ""
@@ -156,6 +158,7 @@ func (s *Service) download(ctx context.Context) (status Status, err error) {
 	defer release()
 	s.mu.Lock()
 	m := s.manifest
+	installerSource := s.installerSource
 	available := s.status.Available
 	s.mu.Unlock()
 	if m == nil || !available {
@@ -179,7 +182,7 @@ func (s *Service) download(ctx context.Context) (status Status, err error) {
 			os.RemoveAll(stageDir)
 		}
 	}()
-	source, err := openSource(ctx, s.client, s.cfg.Source, m.Filename)
+	source, _, err := openSource(ctx, s.client, installerSource, m.Filename)
 	if err != nil {
 		return status, err
 	}
