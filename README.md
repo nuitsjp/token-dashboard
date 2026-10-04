@@ -2,9 +2,15 @@
 
 AI コーディングアシスタントや LLM ツールのトークン消費量・推定コスト・利用枠の残量を、TURZX 9.2 インチ USB ディスプレイへリアルタイムに常時表示する Windows アプリケーションです。
 
-![TURZX Display Output](docs/images/turzx-screen-preview.png)
+![TURZX Display Output](docs/images/turzx-actual-display.jpeg)
 
 Windows へのサインイン時に自動でバックグラウンド起動し、タスクトレイに常駐します。トレイアイコンからウィンドウを開くことで、ディスプレイと同じ表示内容のプレビュー確認や各種設定が行えます。
+
+## 対応OS
+
+- **Windows 11 (x64)**
+  - Microsoft Edge WebView2 Runtime が必要です（Windows 11 では通常標準搭載されています）。
+  - ※Windows 10 以前や、macOS・Linux 等の他 OS には対応していません。
 
 ## 対応ハードウェア
 
@@ -35,7 +41,7 @@ TURZX スマートディスプレイは、一般的な HDMI/DisplayPort 接続�
 
 ## インストール
 
-1. [GitHub Releases](https://github.com/nuitsjp/token-dashboard/releases) から最新版のインストーラー（`token-monitor-turzx-Setup-<version>.exe`）をダウンロードします。
+1. [GitHub Releases](https://github.com/nuitsjp/token-dashboard/releases) から最新版のインストーラー（`token-monitor-turzx-<version>-amd64-setup.exe`）をダウンロードします。
 2. インストーラーを実行してセットアップを完了します。
 3. インストール完了後、アプリが自動起動してタスクトレイに常駐します。以降は Windows サインイン時にも自動起動します。
 
@@ -108,3 +114,11 @@ Token Monitor を起動し、設定画面を開きます。
 ## アプリの更新
 
 新バージョンが公開されると、ウィンドウ上部に通知バーが表示されます。「Update and restart」をクリックするだけで、最新版への更新とアプリの再起動が自動的に行われます。
+
+## 開発・カスタマイズ
+
+自作のスクリプトやツールから TURZX スマートディスプレイを直接制御したい方向けに、仕組みや通信仕様のドキュメントを公開しています。
+
+- [AI専用ダッシュボードの作り方](docs/how-to-build-ai-dashboard.md): デバイスの概要、パケット構造、Go による最小限の実装例
+- [TURZX 操作アーキテクチャ](docs/turzx-architecture.md): レイヤー設計、フロー制御、プロトコルの詳細仕様
+
