@@ -66,8 +66,11 @@ try {
     run(cli, ['task', 'generate']);
   } else if (command === 'tag') {
     tagRelease(args[0]);
+  } else if (command === 'site') {
+    // Needs gh to read the latest release. The result is site/dist.
+    run(process.execPath, ['site/build.mjs']);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | tag [version] | release <args>');
+    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | tag [version] | release <args> | site');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
     if (command === 'dev') {

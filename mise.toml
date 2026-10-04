@@ -44,3 +44,7 @@ run = "node scripts/run.mjs tag"
 [tasks.release]
 description = "更新用の鍵と更新情報を作る（引数は scripts/run.mjs release へ渡す）"
 run = "node scripts/run.mjs release"
+
+[tasks.site]
+description = "GitHub Pages の製品サイトを site/dist に作る（最新リリースのリンクを埋め込む）"
+run = "node scripts/run.mjs site"

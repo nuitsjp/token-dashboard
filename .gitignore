@@ -9,6 +9,7 @@
 /frontend/playwright-report/
 /frontend/test-results/
 /frontend/coverage/
+/site/dist/
 *.syso
 *.log
 *.private-key

@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Token Dashboard | AI コーディングの利用枠を USB ディスプレイに常時表示</title>
+  <meta name="description" content="Claude Code、Codex、Cursor などの利用枠の残量とリセットまでの時間を、TURZX 9.2 インチ USB ディスプレイに表示し続ける Windows アプリです。無料で使える MIT ライセンスのオープンソースです。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nuitsjp.github.io/token-dashboard/">
+  <meta property="og:title" content="Token Dashboard | 全画面で作業していても、AI の残量が見える">
+  <meta property="og:description" content="Claude Code、Codex、Cursor などの利用枠の残量とリセットまでの時間を、TURZX 9.2 インチ USB ディスプレイに表示し続ける Windows アプリです。">
+  <meta property="og:image" content="https://nuitsjp.github.io/token-dashboard/assets/hero.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/icon.svg" width="28" height="28" alt="">
+        Token Dashboard
+      </a>
+      <nav class="site-nav" aria-label="サイト内">
+        <a href="#pace">特徴</a>
+        <a href="#start">はじめかた</a>
+        <a href="#faq">よくある質問</a>
+        <a href="https://github.com/nuitsjp/token-dashboard/blob/main/docs/turzx-architecture.md">アーキテクチャ</a>
+        <a href="https://github.com/nuitsjp/token-dashboard">GitHub</a>
+      </nav>
+      <a class="button button-small" href="{{INSTALLER_URL}}">ダウンロード</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap">
+        <h1 id="hero-title">全画面で<wbr>作業していても、<br>AI&nbsp;の<wbr>残量が<wbr>見える</h1>
+        <p class="lead">Claude Code、Codex、Cursor、Antigravity などの利用枠の残量とリセットまでの時間を、モニターの下に置いた TURZX 9.2 インチ USB ディスプレイに表示し続けます。このペースだとリセット前に使い切る枠は、黄色や赤に変わります。</p>
+        <div class="cta-row">
+          <a class="button" href="{{INSTALLER_URL}}">Windows 版を無料でダウンロード</a>
+          <a class="text-link" href="#hardware">TURZX 9.2 インチの購入先を見る</a>
+        </div>
+        <p class="fineprint">最新版 v{{VERSION}}（{{INSTALLER_SIZE}}）、Windows&nbsp;11&nbsp;(x64)&nbsp;用。MIT ライセンスのオープンソースです。</p>
+      </div>
+      <figure class="hero-band">
+        <img src="assets/hero.jpg" width="2400" height="960" alt="モニターの下に置いた TURZX 9.2 インチディスプレイ。左から Cursor、Antigravity、Grok、Codex、Claude の利用枠が円形のゲージで並び、上の段に今日・今月・累計のトークン数と推定コストが表示されている">
+      </figure>
+      <div class="wrap tools">
+        <p>表示できる主な AI ツール</p>
+        <ul>
+          <li>Claude Code</li>
+          <li>Codex</li>
+          <li>Cursor</li>
+          <li>Antigravity</li>
+          <li>Grok</li>
+          <li>OpenCode</li>
+        </ul>
+        <p>Token Monitor と連携すると、40 種類以上の AI ツールの利用状況を表示できます。</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="problem-title">
+      <div class="wrap cols">
+        <h2 id="problem-title" class="span-3">残量を<wbr>確かめる<wbr>たびに、<wbr>手が<wbr>止まって<wbr>いませんか</h2>
+        <div class="span-4">
+          <ul class="pains">
+            <li>実装の途中で 5 時間枠を使い切り、リセットまで待つことになる。</li>
+            <li>Claude Code、Codex、Cursor を併用していると、使用量を確かめる場所がツールの数だけある。</li>
+            <li>デスクトップのウィジェットはエディターの後ろに隠れ、全画面表示ではタスクバーも見えなくなる。</li>
+          </ul>
+          <p>Token Dashboard を使えば、利用枠の状態を PC の画面の外に出しておけます。視線を少し下げるだけで、どの枠がいつリセットされるかが分かります。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="pace" aria-labelledby="pace-title">
+      <div class="wrap cols">
+        <div class="span-3">
+          <h2 id="pace-title">このままだと<wbr>足りなくなる<wbr>枠は、<wbr>色が<wbr>変わる</h2>
+          <p>色は、残量と減り方の速さの両方から決まります。たとえば 5 時間枠が始まって 30 分で 40% を使っていたら、残量が 60% あっても黄色になります。</p>
+          <dl class="rules">
+            <div>
+              <dt>残量で見る</dt>
+              <dd>40% 以下で黄色、25% 未満で赤になります。</dd>
+            </div>
+            <div>
+              <dt>減り方で見る</dt>
+              <dd>時間どおりに使った場合の残量と比べて、8 割を下回ると黄色、5 割を下回ると赤になります。</dd>
+            </div>
+          </dl>
+          <p>2 つの判定のうち、悪い方の色で表示します。</p>
+        </div>
+        <figure class="demo span-4" aria-labelledby="demo-title">
+          <figcaption id="demo-title">5 時間枠で試す</figcaption>
+          <div class="demo-body">
+            <div class="gauge" id="demo-gauge" data-state="warn">
+              <svg viewBox="0 0 240 240" role="img" aria-labelledby="gauge-label">
+                <title id="gauge-label">残量 60%、黄色</title>
+                <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 60 100"/>
+                <text x="120" y="130" text-anchor="middle"><tspan class="gauge-pct">60%</tspan><tspan class="gauge-unit" dx="6">5h</tspan></text>
+              </svg>
+              <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span class="reset-value">4h 30m</span></p>
+            </div>
+            <div class="controls">
+              <label for="elapsed">枠が始まってからの時間 <output for="elapsed" class="elapsed-value">30 分</output></label>
+              <input type="range" id="elapsed" min="0" max="300" step="5" value="30">
+              <label for="remaining">残量 <output for="remaining" class="remaining-value">60%</output></label>
+              <input type="range" id="remaining" min="0" max="100" step="1" value="60">
+              <p class="verdict" aria-live="polite">黄色: 時間どおりに使った場合の残量（90%）の 8 割を下回っています。</p>
+            </div>
+          </div>
+        </figure>
+      </div>
+      <div class="wrap patterns">
+        <h3>5 時間枠での色の例</h3>
+        <ul>
+          <li>
+            <div class="pattern-panel">
+              <div class="gauge gauge-small" data-state="normal">
+                <svg viewBox="0 0 240 240" aria-hidden="true">
+                  <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                  <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 70 100"/>
+                  <text x="120" y="136" text-anchor="middle" class="gauge-pct">70%</text>
+                </svg>
+                <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span>2h 30m</span></p>
+              </div>
+            </div>
+            <p class="pattern-name">紫</p>
+            <p class="pattern-reason">余裕がある</p>
+            <p class="pattern-numbers">残量 70%、リセットまで 2&nbsp;時間&nbsp;30&nbsp;分。時間どおりなら 50% です。</p>
+          </li>
+          <li>
+            <div class="pattern-panel">
+              <div class="gauge gauge-small" data-state="warn">
+                <svg viewBox="0 0 240 240" aria-hidden="true">
+                  <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                  <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 60 100"/>
+                  <text x="120" y="136" text-anchor="middle" class="gauge-pct">60%</text>
+                </svg>
+                <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span>4h 30m</span></p>
+              </div>
+            </div>
+            <p class="pattern-name">黄色</p>
+            <p class="pattern-reason">減り方が速い</p>
+            <p class="pattern-numbers">残量 60%、リセットまで 4&nbsp;時間&nbsp;30&nbsp;分。時間どおりなら 90% です。</p>
+          </li>
+          <li>
+            <div class="pattern-panel">
+              <div class="gauge gauge-small" data-state="warn">
+                <svg viewBox="0 0 240 240" aria-hidden="true">
+                  <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                  <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 35 100"/>
+                  <text x="120" y="136" text-anchor="middle" class="gauge-pct">35%</text>
+                </svg>
+                <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span>1h 0m</span></p>
+              </div>
+            </div>
+            <p class="pattern-name">黄色</p>
+            <p class="pattern-reason">残量が 40% 以下</p>
+            <p class="pattern-numbers">残量 35%、リセットまで 1&nbsp;時間。</p>
+          </li>
+          <li>
+            <div class="pattern-panel">
+              <div class="gauge gauge-small" data-state="bad">
+                <svg viewBox="0 0 240 240" aria-hidden="true">
+                  <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                  <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 35 100"/>
+                  <text x="120" y="136" text-anchor="middle" class="gauge-pct">35%</text>
+                </svg>
+                <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span>4h 0m</span></p>
+              </div>
+            </div>
+            <p class="pattern-name">赤</p>
+            <p class="pattern-reason">減り方がとても速い</p>
+            <p class="pattern-numbers">残量 35%、リセットまで 4&nbsp;時間。時間どおりなら 80% です。</p>
+          </li>
+          <li>
+            <div class="pattern-panel">
+              <div class="gauge gauge-small" data-state="bad">
+                <svg viewBox="0 0 240 240" aria-hidden="true">
+                  <path class="gauge-track" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100"/>
+                  <path class="gauge-value" d="M 52.12 187.88 A 96 96 0 1 1 187.88 187.88" pathLength="100" style="stroke-dasharray: 15 100"/>
+                  <text x="120" y="136" text-anchor="middle" class="gauge-pct">15%</text>
+                </svg>
+                <p class="gauge-reset"><span>5h</span><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg><span>30m</span></p>
+              </div>
+            </div>
+            <p class="pattern-name">赤</p>
+            <p class="pattern-reason">残量が 25% 未満</p>
+            <p class="pattern-numbers">残量 15%、リセットまで 30&nbsp;分。</p>
+          </li>
+        </ul>
+        <p class="pattern-note">残量が同じ 35% でも、リセットまで 4 時間ある場合は減り方が速すぎるため赤になります。</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="order-title">
+      <div class="wrap cols">
+        <figure class="shot span-4">
+          <img src="images/dashboard-display.png" width="1316" height="873" loading="lazy" alt="Display 画面。上のプレビューに、Cursor、Antigravity、Claude、Grok、Codex の順でゲージが並び、下にサービスごとの表示切り替えが並んでいる">
+          <figcaption>Display 画面。上のプレビューには、TURZX と同じ画像が出ます。</figcaption>
+        </figure>
+        <div class="span-3">
+          <h2 id="order-title">残りが<wbr>少ない<wbr>サービスから<wbr>順に、<wbr>左から<wbr>並ぶ</h2>
+          <p>ゲージはサービスごとにまとまり、いちばん残りが少ない枠を持つサービスが左端に来ます。ゲージは横に最大 7 つ並びます。5 時間枠と週の枠があるサービスは、外側の円が 5 時間枠、内側の円が週の枠です。円の下には、それぞれのリセットまでの残り時間が出ます。</p>
+          <p>上の段には、今日・今月・累計のトークン数と推定コスト（USD）を表示します。</p>
+          <p>表示するサービスと枠は、Display 画面でプレビューを見ながら選べます。円形の Gauges と横棒の Bars も、ここで切り替えます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="visible-title">
+      <div class="wrap cols">
+        <div class="span-3">
+          <h2 id="visible-title">エディターを<wbr>全画面にしても、<wbr>隠れない</h2>
+          <p>TURZX は、Windows からはモニターとして認識されません。マウスポインターとウィンドウは、これまでどおりメインのモニターの中だけを動きます。</p>
+          <p>アプリは、値が変わったときと 1 分ごとに画像を作り、USB で送ります。毎秒 58 回描き直して送り続ける試験でも、CPU 使用率は PC 全体の約 0.9% でした（作者の PC で計測）。</p>
+        </div>
+        <figure class="illustration span-4">
+          <svg viewBox="0 0 640 420" role="img" aria-labelledby="desk-title">
+            <title id="desk-title">エディターを全画面表示したモニターの下に、利用枠のゲージを表示した TURZX が置かれている図</title>
+            <rect class="ill-frame" x="40" y="8" width="560" height="316" rx="14"/>
+            <rect class="ill-screen" x="54" y="22" width="532" height="288" rx="3"/>
+            <rect class="ill-tab" x="54" y="22" width="532" height="24"/>
+            <g class="ill-code">
+              <rect x="74" y="62" width="150" height="7" rx="3"/>
+              <rect x="94" y="80" width="230" height="7" rx="3"/>
+              <rect x="94" y="98" width="190" height="7" rx="3"/>
+              <rect x="114" y="116" width="260" height="7" rx="3"/>
+              <rect x="114" y="134" width="120" height="7" rx="3"/>
+              <rect x="94" y="152" width="40" height="7" rx="3"/>
+              <rect x="74" y="178" width="200" height="7" rx="3"/>
+              <rect x="94" y="196" width="300" height="7" rx="3"/>
+              <rect x="94" y="214" width="170" height="7" rx="3"/>
+              <rect x="114" y="232" width="220" height="7" rx="3"/>
+              <rect x="94" y="250" width="60" height="7" rx="3"/>
+              <rect x="74" y="276" width="40" height="7" rx="3"/>
+            </g>
+            <path class="ill-frame" d="M 298 324 h 44 l 10 26 h -64 z"/>
+            <rect class="ill-bezel" x="64" y="350" width="512" height="62" rx="8"/>
+            <rect class="ill-lcd" x="72" y="357" width="496" height="48" rx="3"/>
+            <g class="ill-gauges">
+              <g transform="translate(107 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-bad" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="22 100"/></g>
+              <g transform="translate(178 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-warn" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="38 100"/></g>
+              <g transform="translate(249 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-normal" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="55 100"/></g>
+              <g transform="translate(320 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-normal" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="64 100"/></g>
+              <g transform="translate(391 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-normal" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="72 100"/></g>
+              <g transform="translate(462 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-normal" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="88 100"/></g>
+              <g transform="translate(533 382)"><path class="ill-track" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100"/><path class="ill-normal" d="M -10.61 10.61 A 15 15 0 1 1 10.61 10.61" pathLength="100" stroke-dasharray="100 100"/></g>
+            </g>
+          </svg>
+          <figcaption>モニターの中はエディターだけ。利用枠は、その下の TURZX に出ます。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="hardware" aria-labelledby="hardware-title">
+      <div class="wrap cols">
+        <div class="span-3">
+          <h2 id="hardware-title">必要なのは、<wbr>TURZX&nbsp;9.2&nbsp;インチと Windows&nbsp;11&nbsp;の&nbsp;PC&nbsp;です</h2>
+          <figure class="device">
+            <img src="images/turzx-device.png" loading="lazy" alt="TURZX 9.2 インチ スマートディスプレイの製品写真">
+            <figcaption>画像の引用元: <a href="https://www.turzx.com/en/2026/09/14/turzx-9-2-inch-detail/">TURZX 9.2 Inch Detail (turzx.com)</a></figcaption>
+          </figure>
+        </div>
+        <div class="span-4">
+          <dl class="specs">
+            <div><dt>画面</dt><dd>9.2 インチ、1920 × 462 ピクセルの横長液晶</dd></div>
+            <div><dt>接続</dt><dd>USB Type-C ケーブル 1 本で給電と通信をします</dd></div>
+            <div><dt>ドライバー</dt><dd>追加のインストールは要りません</dd></div>
+            <div><dt>PC</dt><dd>Windows 11 (x64)。Microsoft Edge WebView2 Runtime を使います（Windows 11 には通常入っています）</dd></div>
+          </dl>
+          <div class="cta-row">
+            <a class="button button-quiet" href="https://ja.aliexpress.com/item/1005009533369374.html">AliExpress で見る（動作確認済み）</a>
+            <a class="text-link" href="https://www.turzx.com/en/2026/09/14/turzx-9-2-inch-detail/">公式の製品情報</a>
+          </div>
+          <p class="caution">Amazon でも外観がほぼ同じ <a href="https://www.amazon.co.jp/dp/B0H1BLTL7C">OEM 品</a>が売られていますが、動作は確認していません。ファームウェアや通信仕様の違いで動かない可能性があります。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="start" aria-labelledby="start-title">
+      <div class="wrap">
+        <h2 id="start-title">インストールして USB&nbsp;に<wbr>つなげば、<wbr>表示が<wbr>始まります</h2>
+        <ol class="steps">
+          <li>
+            <h3>インストーラーを実行する</h3>
+            <p><a href="{{INSTALLER_URL}}">{{INSTALLER_NAME}}</a> を実行します。インストーラーにコード署名をしていないため、初回は Windows SmartScreen の画面が出ます。「詳細情報」を押してから「実行」を選んでください。インストール後はタスクトレイに常駐し、Windows へのサインイン時に自動で起動します。</p>
+          </li>
+          <li>
+            <h3>TURZX を USB でつなぐ</h3>
+            <p>付属の USB Type-C ケーブルで PC につなぎます。TURZX のメーカー製ソフトを起動している場合は、先に終了してください。Display 画面の右上にある Output にデバイス名（例: TURZX1.0 (xxxx)）が出ていれば、認識できています。</p>
+          </li>
+          <li>
+            <h3>表示を確かめる</h3>
+            <p>最初は、この PC のログを読む Local モードで表示します。この PC で Claude Code や Codex を使っていれば、設定しなくても利用状況が出ます。</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="modes-title">
+      <div class="wrap">
+        <h2 id="modes-title">この&nbsp;PC&nbsp;だけなら&nbsp;Local、<wbr>複数の&nbsp;PC&nbsp;を<wbr>まとめるなら&nbsp;Hub</h2>
+        <p class="section-lead">取得元は、ウィンドウ左の Connection 画面で切り替えます。</p>
+        <div class="table-scroll">
+          <table class="modes">
+            <thead>
+              <tr><th scope="col"><span class="visually-hidden">項目</span></th><th scope="col">Local（最初の設定）</th><th scope="col">Hub</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">準備</th><td>要りません。集計ツールの tokscale を同梱しています</td><td><a href="https://github.com/Javis603/token-monitor">Token Monitor</a> で Hub をホストします</td></tr>
+              <tr><th scope="row">集計する範囲</th><td>この PC のログ</td><td>Hub に集まるすべての端末</td></tr>
+              <tr><th scope="row">主なツール</th><td>Claude Code、Codex など、この PC にログが残るツール</td><td>Cursor と Antigravity を含む 40 種類以上</td></tr>
+              <tr><th scope="row">複数アカウント</th><td>合算できません</td><td>合算できます</td></tr>
+              <tr><th scope="row">利用枠の更新</th><td>2 分ごと</td><td>Hub から変化を受け取るたび</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <details class="howto">
+          <summary>Hub モードの設定手順</summary>
+          <ol>
+            <li>
+              <p>Token Monitor の設定画面で、「マルチデバイス同期」の「このデバイスで Hub をホスト」を選びます。表示される接続先 URL（例: http://192.168.0.17:17321）と共有シークレットを控えます。</p>
+              <img src="images/token-monitor-hub-settings.png" loading="lazy" alt="Token Monitor の設定画面。マルチデバイス同期で「このデバイスで Hub をホスト」が選ばれ、ポートと共有シークレット、他のデバイスの接続先が表示されている">
+            </li>
+            <li>
+              <p>Token Dashboard の Connection 画面で Data source を Hub にし、Hub URL と Access token（共有シークレット）を入力して Save を押します。</p>
+              <img src="images/dashboard-connection-hub.png" loading="lazy" alt="Token Dashboard の Connection 画面。Data source に Hub が選ばれ、Hub URL と Access token の入力欄がある">
+            </li>
+          </ol>
+        </details>
+      </div>
+    </section>
+
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="wrap cols">
+        <h2 id="faq-title" class="span-3">よくある質問</h2>
+        <div class="faq span-4">
+          <details>
+            <summary>無料で使えますか</summary>
+            <p>はい。MIT ライセンスで公開しているオープンソースです。ソースコードは <a href="https://github.com/nuitsjp/token-dashboard">GitHub</a> にあります。</p>
+          </details>
+          <details>
+            <summary>利用状況のデータはどこに保存されますか</summary>
+            <p>Token Dashboard は、受け取った利用状況をメモリ上だけで持ち、履歴を残しません。Local モードでは、同梱の tokscale がログ解析用のキャッシュをアプリ専用のフォルダーに置きます。Hub の URL とアクセストークンは Windows の DPAPI でユーザーごとに暗号化して保存し、アクセストークンは画面にもログにも表示しません。</p>
+          </details>
+          <details>
+            <summary>インストール時に警告が出ました</summary>
+            <p>インストーラーにコード署名をしていないため、初回は Windows SmartScreen の画面が出ます。「詳細情報」を押してから「実行」を選ぶと、インストールが始まります。</p>
+          </details>
+          <details>
+            <summary>新しいバージョンにはどう更新しますか</summary>
+            <p>アプリは起動するたびに、GitHub Releases の新版をバックグラウンドで確認します。見つかった新版は、Ed25519 の署名とインストーラーのハッシュを検証してから取得しておきます。ウィンドウ上部の通知に出る「Update and restart」を押すと、更新して再起動します。</p>
+          </details>
+          <details>
+            <summary>Windows 10 や Mac で使えますか</summary>
+            <p>使えません。対応しているのは Windows 11 (x64) だけです。</p>
+          </details>
+          <details>
+            <summary>ほかのサイズの TURZX でも使えますか</summary>
+            <p>いまは 9.2 インチ（1920 × 462）だけに対応しています。</p>
+          </details>
+          <details>
+            <summary>Token Monitor は必要ですか</summary>
+            <p>Local モードで使うなら不要です。複数の PC の利用量をまとめたいときや、Cursor と Antigravity の利用枠を表示したいときに、Token Monitor と連携する Hub モードを使います。</p>
+          </details>
+          <details>
+            <summary>TURZX のメーカー製ソフトと一緒に使えますか</summary>
+            <p>同時には使えません。Token Dashboard で表示する間は、メーカー製のソフトを終了してください。Token Dashboard を終了すると、TURZX は起動直後の表示に戻ります。</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="dev-title">
+      <div class="wrap cols">
+        <div class="span-4">
+          <h2 id="dev-title">TURZX&nbsp;を<wbr>自分の<wbr>プログラムから<wbr>動かしたい<wbr>人へ</h2>
+          <p>Token Dashboard が使っている USB 通信の仕様を公開しています。暗号化した 512 バイトのヘッダーの組み立て方と、Go の実装例を載せています。</p>
+        </div>
+        <div class="span-3 dev-links">
+          <a class="button button-quiet" href="https://github.com/nuitsjp/token-dashboard/blob/main/docs/turzx-architecture.md">アーキテクチャを読む（GitHub）</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title">
+      <div class="wrap">
+        <div class="bezel">
+          <h2 id="closing-title">AI&nbsp;の<wbr>残量を、<wbr>エディターの<wbr>外に<wbr>出しておく</h2>
+          <p>無料で使えます。インストールして TURZX をつなげば、この PC の利用状況がすぐに表示されます。</p>
+          <div class="cta-row">
+            <a class="button" href="{{INSTALLER_URL}}">Windows 版を無料でダウンロード</a>
+          </div>
+          <p class="fineprint">最新版 v{{VERSION}}（{{INSTALLER_SIZE}}）、Windows&nbsp;11&nbsp;(x64)&nbsp;用。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>Token Dashboard v{{VERSION}}</p>
+      <ul>
+        <li><a href="https://github.com/nuitsjp/token-dashboard">GitHub</a></li>
+        <li><a href="https://github.com/nuitsjp/token-dashboard/releases">リリース一覧</a></li>
+        <li><a href="https://github.com/nuitsjp/token-dashboard/blob/main/LICENSE">MIT ライセンス</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <script>
+    // Same rules as the gauges on the device: the worse of the remaining rule and the pace rule wins.
+    const windowMinutes = 300;
+    const states = ['normal', 'warn', 'bad'];
+    const colorNames = ['紫', '黄色', '赤'];
+    const gauge = document.getElementById('demo-gauge');
+    const elapsed = document.getElementById('elapsed');
+    const remaining = document.getElementById('remaining');
+
+    function formatElapsed(minutes) {
+      const h = Math.floor(minutes / 60), m = minutes % 60;
+      if (h === 0) return `${m} 分`;
+      return m === 0 ? `${h} 時間` : `${h} 時間 ${m} 分`;
+    }
+
+    function formatLeft(minutes) {
+      const h = Math.floor(minutes / 60), m = minutes % 60;
+      return h === 0 ? `${m}m` : `${h}h ${m}m`;
+    }
+
+    function update() {
+      const used = Number(elapsed.value), left = windowMinutes - used, rest = Number(remaining.value);
+      const ideal = left / windowMinutes;
+      const pace = ideal === 0 ? Infinity : rest / (ideal * 100);
+      const paceState = pace >= 0.8 ? 0 : pace >= 0.5 ? 1 : 2;
+      const restState = rest > 40 ? 0 : rest >= 25 ? 1 : 2;
+      const state = Math.max(paceState, restState);
+      let reason = '残量と減り方のどちらにも問題はありません。';
+      if (state > 0 && restState >= paceState) {
+        reason = state === 1 ? '残量が 40% 以下です。' : '残量が 25% を下回っています。';
+      } else if (state > 0) {
+        reason = `時間どおりに使った場合の残量（${Math.round(ideal * 100)}%）の${state === 1 ? ' 8 割' : '半分'}を下回っています。`;
+      }
+      gauge.dataset.state = states[state];
+      gauge.querySelector('.gauge-value').style.strokeDasharray = `${rest} 100`;
+      gauge.querySelector('.gauge-value').style.opacity = rest === 0 ? 0 : 1;
+      gauge.querySelector('.gauge-pct').textContent = `${rest}%`;
+      gauge.querySelector('title').textContent = `残量 ${rest}%、${colorNames[state]}`;
+      gauge.querySelector('.reset-value').textContent = formatLeft(left);
+      document.querySelector('.elapsed-value').textContent = formatElapsed(used);
+      document.querySelector('.remaining-value').textContent = `${rest}%`;
+      document.querySelector('.verdict').textContent = `${colorNames[state]}: ${reason}`;
+    }
+
+    elapsed.addEventListener('input', update);
+    remaining.addEventListener('input', update);
+  </script>
+</body>
+</html>
