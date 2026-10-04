@@ -60,8 +60,8 @@ function uninstall() {
 test('起動時に取得した新版で、確認後に更新して再起動する @desktop', async () => {
   test.skip(process.env.DESKTOP_E2E !== '1', 'installs the desktop app; run node scripts/run.mjs test:desktop');
   test.setTimeout(15 * 60_000);
-  expect(powershell('@(Get-Process token-monitor-turzx -ErrorAction SilentlyContinue).Count'), 'stop every running Token Monitor TURZX first').toBe('0');
-  expect(existsSync(installedExe), 'uninstall Token Monitor TURZX first').toBe(false);
+  expect(powershell('@(Get-Process token-monitor-turzx -ErrorAction SilentlyContinue).Count'), 'stop every running Token Dashboard first').toBe('0');
+  expect(existsSync(installedExe), 'uninstall Token Dashboard first').toBe(false);
   const work = mkdtempSync(join(tmpdir(), 'turzx-update-e2e-'));
   const source = join(work, 'release');
   const dataDir = join(work, 'data');
@@ -100,7 +100,7 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
     await test.step('手順3', async () => {
       launch(installedExe, env);
       const window = windowState(oldPid);
-      expect(window.title).toBe('Token Monitor TURZX v0.1.0');
+      expect(window.title).toBe('Token Dashboard v0.1.0');
       expect(window.text).toContain('Version 0.2.0 is ready to install.');
       expect(window.names).toContain('Update and restart');
       expect(window.names.indexOf('Update and restart')).toBeLessThan(window.names.indexOf('Style'));
@@ -117,7 +117,7 @@ test('起動時に取得した新版で、確認後に更新して再起動す�
     await test.step('手順6', async () => {
       launch(installedExe, env);
       const window = windowState(appProcesses(installedExe)[0]);
-      expect(window.title).toBe('Token Monitor TURZX v0.2.0');
+      expect(window.title).toBe('Token Dashboard v0.2.0');
       expect(window.names).toContain('Style');
       expect(window.names).not.toContain('Update and restart');
     });

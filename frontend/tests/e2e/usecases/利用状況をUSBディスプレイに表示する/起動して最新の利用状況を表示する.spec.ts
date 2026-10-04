@@ -13,7 +13,7 @@ import { shortIntervals } from '../../support/local';
 type Rgb = readonly [number, number, number];
 const background: Rgb = [15, 17, 23];
 const panelFill: Rgb = [21, 24, 33];
-const normal: Rgb = [144, 133, 233]; // violet
+const normal: Rgb = [116, 102, 224]; // violet
 const danger: Rgb = [240, 97, 109];
 const caution: Rgb = [250, 178, 25];
 // [left, top, right, bottom] of the first panel (one circle) and of the second panel of ranked().
@@ -132,9 +132,9 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
     });
     let first = '';
     await test.step('手順2', async () => {
-      const before = await preview(page);
       hub.send('snapshot', stats(12));
-      await expect.poll(() => preview(page)).not.toBe(before);
+      // Waiting for the tokens, not just a new image: the app may still swap "Waiting for local usage" for "Waiting for Hub" after the start.
+      await expect.poll(async () => inked(page, await preview(page), tokensStrip)).toBeGreaterThan(500);
       first = await preview(page);
       // Tokens run across the top. Below them, alpha (12% left, so danger) and beta (80%, normal)
       // each have a panel; gamma has no meter and takes none.

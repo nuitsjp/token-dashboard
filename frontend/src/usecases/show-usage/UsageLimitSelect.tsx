@@ -16,12 +16,12 @@ export function UsageLimitSelect() {
   const setShown = useSetShown();
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: limitsKey })), [client]);
   const contracts = limits.data ?? [];
-  return <Card withBorder padding="md">
+  return <Card withBorder padding="md" className={styles.panel}>
     <Title order={4} mb="sm">Usage Limits</Title>
     <ErrorNotice error={limits.error ?? setShown.error} />
     {contracts.length === 0
       ? !limits.error && <Text size="sm" c="dimmed">Waiting for usage.</Text>
-      : <div className={styles.grid}>
+      : <div className={styles.scroll}><div className={styles.grid}>
         {contracts.map(contract => {
           const windows = contract.windows ?? [];
           const shown = windows.filter(w => w.shown).length;
@@ -45,6 +45,6 @@ export function UsageLimitSelect() {
             </div>
           </div>;
         })}
-      </div>}
+      </div></div>}
   </Card>;
 }

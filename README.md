@@ -1,4 +1,4 @@
-# token-monitor-turzx
+# Token Dashboard
 
 ローカルまたは Token Monitor Hub から取得した AI ツールの利用状況（トークン数・推定コストと利用枠）を、TURZX 9.2インチ USB ディスプレイへリアルタイムに表示する Windows 常駐アプリです。Windows へのサインイン時に自動で起動してタスクトレイに常駐し、ウィンドウを開くと USB ディスプレイと同じ表示のプレビューを確認し、取得元と表示先を設定できます。Wails（Go・React）で構成し、GitHub Releases で公開するインストーラーから導入・自動更新します。
 
