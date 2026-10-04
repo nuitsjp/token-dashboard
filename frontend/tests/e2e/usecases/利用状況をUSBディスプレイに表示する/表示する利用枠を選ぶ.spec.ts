@@ -198,7 +198,13 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
       // A selection that cannot be saved leaves the list as it was and shows the error.
       copyFileSync(settingsFile, join(dataDir, 'settings.good'));
       writeFileSync(settingsFile, '{broken');
+      // A periodic Limits read can show the same error before the save has finished.
+      const failedSave = page.waitForResponse(response => response.url() === `${server.url}/wails/runtime`
+        && response.request().postDataJSON().args?.methodName === 'token-monitor-turzx/internal/display.Service.SetShown');
       await sw('alpha Pro 5-hour').click();
+      const response = await failedSave;
+      expect(response.ok()).toBe(false);
+      expect(await response.text()).toContain('saved settings cannot be read');
       await expect(page.getByText(/saved settings cannot be read/).first()).toBeVisible();
       await expect(sw('alpha Pro 5-hour')).toHaveAttribute('aria-checked', 'false');
       copyFileSync(join(dataDir, 'settings.good'), settingsFile);
