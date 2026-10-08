@@ -1,0 +1,48 @@
+<main class="bars-theme" aria-label="Token usage and limits">
+  {{#if available}}
+    <section class="tokens" aria-label="Tokens">
+      {{#each tokens}}
+        <article class="token-period" style="--token-font-size: {{tokensFontSize}}px">
+          <span class="token-label baseline-text">{{label}}</span>
+          <span class="token-cost baseline-text">{{costText}}</span>
+          <span class="token-value baseline-text">{{tokensText}}</span>
+        </article>
+      {{/each}}
+    </section>
+    <div class="divider" aria-hidden="true"></div>
+    <section class="limits" aria-label="Usage Limits">
+      {{#each barColumns}}
+        <div class="limit-column">
+          {{#each contracts}}
+            <article class="contract">
+              <header class="contract-heading">
+                <span class="provider baseline-text">{{provider}}</span>
+                <span class="plan baseline-text">{{plan}}</span>
+              </header>
+              {{#each windows}}
+                <div class="window" data-window-id="{{id}}">
+                  <div class="window-line">
+                    <span class="window-label baseline-text">{{label}}</span>
+                    <span class="window-reset baseline-text">{{barResetText}}</span>
+                    <span class="window-percent baseline-text">
+                      <span class="percent-reserve" aria-hidden="true">100%</span>
+                      <span class="percent-value">{{percentText}}</span>
+                    </span>
+                  </div>
+                  <svg class="bar" viewBox="0 0 100 14" preserveAspectRatio="none" aria-hidden="true">
+                    <rect class="bar-track" width="100%" height="14"></rect>
+                    {{#if hasRemaining}}
+                      <rect class="bar-fill tone-{{tone}}" data-meter-fill width="{{remainingPercent}}%" height="14"></rect>
+                    {{/if}}
+                  </svg>
+                </div>
+              {{/each}}
+            </article>
+          {{/each}}
+        </div>
+      {{/each}}
+    </section>
+  {{else}}
+    <div class="waiting">{{waitingMessage}}</div>
+  {{/if}}
+</main>

@@ -1,0 +1,211 @@
+:root {
+  --background: #0f1117;
+  --panel: #151821;
+  --divider: #2a2f3a;
+  --text: #e8eaf0;
+  --dim: #8a90a0;
+  --accent: #7cc4ff;
+  --normal: #7466e0;
+  --warning: #fab219;
+  --danger: #f0616d;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  width: 1920px;
+  height: 462px;
+  overflow: hidden;
+}
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: "Yu Gothic";
+}
+.display {
+  position: relative;
+  width: 1920px;
+  height: 462px;
+}
+.tokens {
+  position: absolute;
+  left: 15px;
+  top: 30px;
+  height: 42px;
+  display: flex;
+  align-items: baseline;
+  gap: 64px;
+  white-space: nowrap;
+}
+.token-period {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.period-label {
+  color: var(--dim);
+  font-size: 20px;
+}
+.token-count {
+  font-size: 34px;
+  font-weight: 700;
+}
+.token-cost {
+  color: var(--accent);
+  font-size: 22px;
+}
+.panels {
+  position: absolute;
+  left: 8px;
+  top: 86px;
+  width: 1904px;
+  height: 346px;
+  display: grid;
+  grid-template-columns: repeat(7, 272px);
+}
+.panel {
+  min-width: 0;
+  height: 346px;
+  margin: 0 7px;
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.provider-heading {
+  height: 53px;
+  padding: 10px 13px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.provider-icon {
+  width: 28px;
+  height: 28px;
+  align-self: center;
+  margin: -4px 0 0;
+  flex-shrink: 0;
+}
+.provider-name {
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 0;
+  font-size: 26px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.provider-icon + .provider-name {
+  max-width: calc(100% - 38px);
+}
+.provider-plan {
+  min-width: 0;
+  flex: 1;
+  color: var(--dim);
+  font-size: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.circles {
+  display: flex;
+  margin-left: -8px;
+}
+.circle {
+  width: 272px;
+  height: 282px;
+  flex: 0 0 272px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.gauge {
+  width: 206.36px;
+  height: 206.36px;
+  flex-shrink: 0;
+  margin-top: -2px;
+  overflow: visible;
+}
+.gauge-track,
+.gauge-fill {
+  fill: none;
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+.gauge-track {
+  stroke: var(--divider);
+}
+.tone-normal {
+  stroke: var(--normal);
+}
+.tone-warning {
+  stroke: var(--warning);
+}
+.tone-danger {
+  stroke: var(--danger);
+}
+.percentages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.percentage-row {
+  height: 31px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+.percentage-row strong {
+  font-size: 27px;
+  font-weight: 700;
+}
+.percentage-row span {
+  color: var(--dim);
+  font-size: 18px;
+}
+.group-name {
+  fill: var(--text);
+  font-size: 18px;
+}
+.reset-rows {
+  display: grid;
+  grid-auto-rows: 35px;
+  justify-items: center;
+  margin-top: 8px;
+}
+.reset-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 22px;
+  white-space: nowrap;
+}
+.duration-label {
+  min-width: 36px;
+  margin-right: 4px;
+  color: var(--dim);
+  font-size: 22px;
+  font-weight: 700;
+}
+.clock {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.waiting {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+  font-size: 64px;
+}

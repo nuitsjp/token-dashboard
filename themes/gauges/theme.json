@@ -1,0 +1,9 @@
+{
+  "formatVersion": 1,
+  "id": "gauges",
+  "name": "Gauges",
+  "width": 1920,
+  "height": 462,
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}

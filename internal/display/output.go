@@ -1,35 +1,33 @@
 package display
 
 import (
-	"bytes"
 	"context"
 	"image"
-	"image/jpeg"
 	"log/slog"
 
 	"token-monitor-turzx/internal/turzx"
 )
 
-// Output sends images to one TURZX in order. Only the newest pending image is kept.
+// Output sends already encoded JPEGs to one TURZX in order. Only the newest pending image is kept.
 type Output struct {
 	target  func() (string, error)
 	logger  *slog.Logger
-	pending chan *image.RGBA
+	pending chan []byte
 	done    chan struct{}
 }
 
 // NewOutput sends to the device ID that target returns at the time of each send.
 func NewOutput(target func() (string, error), logger *slog.Logger) *Output {
-	return &Output{target: target, logger: logger, pending: make(chan *image.RGBA, 1), done: make(chan struct{})}
+	return &Output{target: target, logger: logger, pending: make(chan []byte, 1), done: make(chan struct{})}
 }
 
 // Submit replaces any image still waiting to be sent. It must be called from one goroutine.
-func (o *Output) Submit(img *image.RGBA) {
+func (o *Output) Submit(jpeg []byte) {
 	select {
 	case <-o.pending:
 	default:
 	}
-	o.pending <- img
+	o.pending <- jpeg
 }
 
 // Run sends until ctx ends, then restarts the display so it returns to its start-up screen.
@@ -54,7 +52,7 @@ func (o *Output) Run(ctx context.Context) {
 				conn.Close()
 			}
 			return
-		case img := <-o.pending:
+		case jpeg := <-o.pending:
 			id, err := o.target()
 			if err != nil {
 				fail("turzx_target_failed", err)
@@ -75,13 +73,8 @@ func (o *Output) Run(ctx context.Context) {
 				}
 				connID = id
 			}
-			var buf bytes.Buffer
-			if err := jpeg.Encode(&buf, rotateClockwise(img), &jpeg.Options{Quality: 85}); err != nil {
-				fail("turzx_encode_failed", err)
-				continue
-			}
 			// A failed image is dropped; the next image reopens the device.
-			if err := conn.SendJPEG(buf.Bytes()); err != nil {
+			if err := conn.SendJPEG(jpeg); err != nil {
 				conn.Close()
 				conn = nil
 				fail("turzx_send_failed", err)
