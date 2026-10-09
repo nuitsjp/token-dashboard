@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{{width}}" height="{{height}}" viewBox="0 0 {{width}} {{height}}" font-family="Yu Gothic" font-weight="500" fill="{{colors.text}}">
+  <rect width="{{width}}" height="{{height}}" fill="{{colors.background}}" />
+  {{#if available}}
+    <text x="{{layout.gauges.tokenX}}" y="{{layout.gauges.tokenBaseline}}">{{#each tokens}}<tspan dx="{{#if @first}}0{{else}}{{@root.layout.gauges.tokenGap}}{{/if}}" font-size="20" fill="{{@root.colors.dim}}">{{label}}</tspan><tspan dx="{{@root.layout.gauges.tokenItemGap}}" font-size="34" font-weight="700" fill="{{@root.colors.text}}">{{tokensText}}</tspan><tspan dx="{{@root.layout.gauges.tokenItemGap}}" font-size="22" fill="{{@root.colors.accent}}">{{costText}}</tspan>{{/each}}</text>
+    {{#each gaugePanels}}
+      <g transform="translate({{x}} {{y}})">
+        <defs><clipPath id="panel-{{@index}}"><rect width="{{width}}" height="{{height}}" rx="{{@root.layout.gauges.panelRadius}}" /></clipPath></defs>
+        <rect width="{{width}}" height="{{height}}" rx="{{@root.layout.gauges.panelRadius}}" fill="{{@root.colors.divider}}" />
+        <rect x="1" y="1" width="{{innerWidth}}" height="{{innerHeight}}" rx="15" fill="{{@root.colors.panel}}" />
+        <g clip-path="url(#panel-{{@index}})">
+          {{#if icon}}<image x="{{@root.layout.gauges.headingX}}" y="12" width="{{@root.layout.gauges.iconSize}}" height="{{@root.layout.gauges.iconSize}}" xlink:href="{{icon}}" />{{/if}}
+          <text x="{{headingTextX}}" y="{{@root.layout.gauges.headingBaseline}}"><tspan font-size="26" font-weight="700">{{provider}}</tspan><tspan dx="10" font-size="22" fill="{{@root.colors.dim}}">{{plan}}</tspan></text>
+          {{#each circles}}
+            <g transform="translate({{x}} 0)">
+              <g transform="translate({{gaugeX}} {{@root.layout.gauges.circleTop}}) scale({{gaugeScale}})">
+                {{#each windows}}
+                  <g data-window-id="{{id}}" fill="none" stroke-width="{{@root.layout.gauges.strokeWidth}}" stroke-linecap="round">
+                    <path d="{{trackPath}}" stroke="{{@root.colors.divider}}" />
+                    {{#if hasRemaining}}<path d="{{fillPath}}" stroke="{{fillColor}}" data-meter-fill="true" />{{/if}}
+                  </g>
+                  <text x="100" y="{{percentageY}}" text-anchor="middle"><tspan font-size="27" font-weight="700">{{percentText}}</tspan><tspan dx="6" font-size="18" fill="{{@root.colors.dim}}">{{durationLabel}}</tspan></text>
+                {{/each}}
+                {{#if showName}}<text x="100" y="{{nameY}}" font-size="18" text-anchor="middle">{{name}}</text>{{/if}}
+              </g>
+              {{#each windows}}
+                <g transform="translate(0 {{resetY}})" font-size="{{@root.layout.gauges.resetFontSize}}">
+                  <text x="{{resetLabelX}}" font-weight="700" fill="{{@root.colors.dim}}">{{durationLabel}}</text>
+                  <svg x="{{clockX}}" y="-17" width="{{@root.layout.gauges.clockSize}}" height="{{@root.layout.gauges.clockSize}}" viewBox="0 0 16 16" fill="none" stroke="{{@root.colors.text}}" stroke-width="2"><circle cx="8" cy="8" r="7" /><path d="M 8 3.6 V 8 L 11.6 10.4" /></svg>
+                  <text x="{{resetTextX}}">{{resetText}}</text>
+                </g>
+              {{/each}}
+            </g>
+          {{/each}}
+        </g>
+      </g>
+    {{/each}}
+  {{else}}
+    <text x="50%" y="253" text-anchor="middle" font-size="64" fill="{{colors.dim}}">{{waitingMessage}}</text>
+  {{/if}}
+</svg>

@@ -6,7 +6,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"image"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -122,14 +121,11 @@ func run() error {
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
-	renderer, err := display.NewRenderer()
-	if err != nil {
-		return err
-	}
 	usageState := usage.NewState()
 	displayService := &display.Service{State: usageState, Logger: logger,
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
+	renderer := display.NewCanvasRenderer(displayService, emit)
 	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -164,7 +160,7 @@ func run() error {
 		}}
 	}
 	app = application.New(options)
-	sink := func(*image.RGBA) {}
+	sink := func([]byte) {}
 	if !serverMode {
 		go output.Run(ctx)
 		sink = output.Submit
@@ -202,7 +198,7 @@ func run() error {
 			})
 		}
 		menu := application.NewMenu()
-		update :=menu.Add("").SetHidden(true)
+		update := menu.Add("").SetHidden(true)
 		menu.Add("Open").OnClick(func(*application.Context) { show() })
 		menu.AddSeparator()
 		menu.Add("Exit").OnClick(func(*application.Context) {

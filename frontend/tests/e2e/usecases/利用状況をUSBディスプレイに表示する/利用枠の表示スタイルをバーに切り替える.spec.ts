@@ -114,6 +114,109 @@ async function extents(page: Page, src: string) {
   }, { src, rects: tokenRows });
 }
 
+// Compare the actual two encodings sent by the resident renderer, allowing JPEG compression.
+async function rotationError(page: Page, png: string, jpeg: string) {
+  return page.evaluate(async ({ png, jpeg }) => {
+    const decode = async (type: string, data: string) => {
+      const image = new Image();
+      image.src = `data:image/${type};base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      return { width: image.width, height: image.height, pixels: context.getImageData(0, 0, image.width, image.height).data };
+    };
+    const [original, rotated] = await Promise.all([decode('png', png), decode('jpeg', jpeg)]);
+    let clockwise = 0;
+    let counterclockwise = 0;
+    for (let y = 0; y < original.height; y++) for (let x = 0; x < original.width; x++) {
+      const source = (y * original.width + x) * 4;
+      const cw = (x * rotated.width + original.height - 1 - y) * 4;
+      const ccw = ((original.width - 1 - x) * rotated.width + y) * 4;
+      for (let channel = 0; channel < 3; channel++) {
+        clockwise += Math.abs(original.pixels[source + channel] - rotated.pixels[cw + channel]);
+        counterclockwise += Math.abs(original.pixels[source + channel] - rotated.pixels[ccw + channel]);
+      }
+    }
+    const count = original.width * original.height * 3;
+    return { size: [original.width, original.height, rotated.width, rotated.height], clockwise: clockwise / count, counterclockwise: counterclockwise / count };
+  }, { png, jpeg });
+}
+
+test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の取得失敗後も更新を再開する', async ({ page }) => {
+  test.setTimeout(60_000);
+  const dataDir = mkdtempSync(join(tmpdir(), 'turzx-canvas-e2e-'));
+  const hub = await startHub();
+  const server = await startServer(dataDir, 34129, shortIntervals);
+  const frames = new Map<string, { png: string; jpeg: string }>();
+  let assetsFailed = false;
+  let failRequest = false;
+  let injected = false;
+  await page.route('**/wails/runtime', async route => {
+    const body = route.request().postDataJSON();
+    const method = body?.args?.methodName;
+    if (!assetsFailed && method === 'token-monitor-turzx/internal/display.Service.AgentIcons') {
+      assetsFailed = true;
+      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Injected transient asset RPC failure' });
+    } else if (failRequest && !injected && method === 'token-monitor-turzx/internal/display.Service.RenderRequest') {
+      injected = true;
+      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Injected transient renderer RPC failure' });
+    } else await route.continue();
+  });
+  page.on('request', request => {
+    if (!request.url().endsWith('/wails/runtime') || request.method() !== 'POST') return;
+    const body = request.postDataJSON();
+    if (body?.args?.methodName !== 'token-monitor-turzx/internal/display.Service.CompleteFrame') return;
+    const [, png, jpeg, error] = body.args.args as [number, string, string, string];
+    if (error || !png || !jpeg) return;
+    frames.set(`data:image/png;base64,${png}`, { png, jpeg });
+    while (frames.size > 8) frames.delete(frames.keys().next().value!);
+  });
+  const checkRotation = async () => {
+    await expect.poll(async () => {
+      const frame = frames.get(await preview(page));
+      if (!frame) return 0;
+      return (await rotationError(page, frame.png, frame.jpeg)).counterclockwise;
+    }).toBeGreaterThan(5);
+    const frame = frames.get(await preview(page))!;
+    const result = await rotationError(page, frame.png, frame.jpeg);
+    expect(result.size).toEqual([1920, 462, 462, 1920]);
+    expect(result.clockwise).toBeLessThan(5);
+    expect(result.counterclockwise).toBeGreaterThan(result.clockwise + 2);
+  };
+  try {
+    await page.goto(server.url);
+    await page.getByRole('link', { name: 'Connection' }).click();
+    await page.getByRole('textbox', { name: 'Data source' }).click();
+    await page.getByRole('option', { name: 'Hub' }).click();
+    await page.getByLabel('Hub URL').fill(hub.url);
+    await page.getByLabel(/Access token/).fill(token);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible();
+    await expect.poll(() => hub.streams()).toBe(1);
+    hub.send('snapshot', stats(12));
+    await page.getByRole('link', { name: 'Display' }).click();
+    await checkRotation();
+    expect(assetsFailed).toBe(true);
+
+    failRequest = true;
+    await expect.poll(() => injected).toBe(true);
+    const previous = await preview(page);
+    await page.getByRole('textbox', { name: 'Display style' }).click();
+    await page.getByRole('option', { name: 'Bars' }).click();
+    expect(await preview(page)).toBe(previous);
+    await expect.poll(async () => (await colours(page, await preview(page))).divider, { timeout: 20_000 }).toEqual(line);
+    await checkRotation();
+  } finally {
+    await page.close();
+    await server.stop();
+    await hub.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('Display style を Bars に切り替えると、保存して Tokens の列と横棒の利用枠で描き直す', async ({ page, context }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-bars-e2e-'));

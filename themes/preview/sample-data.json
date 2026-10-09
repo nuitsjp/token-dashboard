@@ -1,0 +1,178 @@
+{
+  "available": true,
+  "waitingMessage": "Waiting for Hub",
+  "tokens": [
+    {
+      "label": "Today",
+      "tokensText": "12,345,678",
+      "costText": "$48.32",
+      "tokensFontSize": 42
+    },
+    {
+      "label": "Month",
+      "tokensText": "234,567,890",
+      "costText": "$921.50",
+      "tokensFontSize": 42
+    },
+    {
+      "label": "All",
+      "tokensText": "1,234,567,890",
+      "costText": "$4,812.70",
+      "tokensFontSize": 36
+    }
+  ],
+  "contracts": [
+    {
+      "provider": "claude",
+      "plan": "Max",
+      "circles": [
+        {
+          "name": "",
+          "windows": [
+            {
+              "id": "claude-session",
+              "label": "5-hour",
+              "durationLabel": "5h",
+              "remainingPercent": 72,
+              "tone": "normal",
+              "resetText": "2h 13m",
+              "barResetText": "2h 13m"
+            },
+            {
+              "id": "claude-weekly",
+              "label": "Weekly",
+              "durationLabel": "7d",
+              "remainingPercent": 88,
+              "tone": "normal",
+              "resetText": "3d 4h",
+              "barResetText": "3d 4h"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "codex",
+      "plan": "Pro",
+      "circles": [
+        {
+          "name": "",
+          "windows": [
+            {
+              "id": "codex-session",
+              "label": "Session",
+              "durationLabel": "5h",
+              "remainingPercent": 35,
+              "tone": "warning",
+              "resetText": "1h 48m",
+              "barResetText": "1h 48m"
+            },
+            {
+              "id": "codex-weekly",
+              "label": "Weekly",
+              "durationLabel": "7d",
+              "remainingPercent": 67,
+              "tone": "normal",
+              "resetText": "2d 6h",
+              "barResetText": "2d 6h"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "cursor",
+      "plan": "Ultra",
+      "circles": [
+        {
+          "name": "",
+          "windows": [
+            {
+              "id": "cursor-billing",
+              "label": "Monthly",
+              "durationLabel": "1mo",
+              "remainingPercent": 18,
+              "tone": "danger",
+              "resetText": "8d 2h",
+              "barResetText": "8d 2h"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "antigravity",
+      "plan": "Pro",
+      "circles": [
+        {
+          "name": "Gemini",
+          "windows": [
+            {
+              "id": "antigravity-gemini",
+              "label": "Gemini Daily",
+              "durationLabel": "1d",
+              "remainingPercent": 93,
+              "tone": "normal",
+              "resetText": "14h 20m",
+              "barResetText": "14h 20m"
+            }
+          ]
+        },
+        {
+          "name": "Claude",
+          "windows": [
+            {
+              "id": "antigravity-claude",
+              "label": "Claude Daily",
+              "durationLabel": "1d",
+              "remainingPercent": 54,
+              "tone": "normal",
+              "resetText": "14h 20m",
+              "barResetText": "14h 20m"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "gemini",
+      "plan": "Advanced",
+      "circles": [
+        {
+          "name": "",
+          "windows": [
+            {
+              "id": "gemini-daily",
+              "label": "Daily",
+              "durationLabel": "1d",
+              "remainingPercent": 100,
+              "tone": "normal",
+              "resetText": "23h 10m",
+              "barResetText": "23h 10m"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "opencode",
+      "plan": "Zen",
+      "circles": [
+        {
+          "name": "",
+          "windows": [
+            {
+              "id": "opencode-daily",
+              "label": "Daily",
+              "durationLabel": "1d",
+              "remainingPercent": null,
+              "tone": "normal",
+              "resetText": "—",
+              "barResetText": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

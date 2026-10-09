@@ -1,11 +1,8 @@
 package display
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"image"
-	"image/png"
 	"log/slog"
 	"sync"
 	"time"
@@ -17,7 +14,7 @@ import (
 // Updated is emitted after a new image is available from Preview.
 const Updated = "display:updated"
 
-// Service hands the latest image to the window. The window never draws it.
+// Service coordinates the resident renderer and publishes its latest PNG to the preview.
 type Service struct {
 	// State is where Limits reads the contracts from; SetShown asks it for a redraw.
 	State *usage.State
@@ -26,8 +23,10 @@ type Service struct {
 	Show   func(keys []string, shown bool) error
 	Logger *slog.Logger
 
-	mu      sync.Mutex
-	preview string
+	mu        sync.Mutex
+	preview   string
+	nextFrame uint64
+	pending   *pendingFrame
 }
 
 // hiddenSet is the saved hidden windows as a set.
@@ -73,7 +72,7 @@ func (s *Service) Preview() string {
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
 // until reset stays current. Each image goes to the preview in s and to output. It is a function,
 // not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
+func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage.State, redraw time.Duration, style func() Style, output func([]byte), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
 	for {
@@ -83,14 +82,16 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		if err != nil {
 			logger.Warn("hidden_limits_unavailable", "cause", err)
 		}
-		img := renderer.Render(withoutHidden(stats, hidden), time.Now(), source, style())
-		output(img)
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
-			logger.Error("preview_encode_failed", "cause", err)
+		frame, err := renderer.Render(ctx, withoutHidden(stats, hidden), time.Now(), source, style())
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			logger.Error("display_render_failed", "cause", err)
 		} else {
+			output(frame.JPEG)
 			s.mu.Lock()
-			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(frame.PNG)
 			s.mu.Unlock()
 			emit(Updated, nil)
 		}

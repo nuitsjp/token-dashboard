@@ -1,0 +1,11 @@
+{
+  "name": "token-dashboard-theme-preview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node preview/server.mjs"
+  },
+  "dependencies": {
+    "handlebars": "4.7.10"
+  }
+}
