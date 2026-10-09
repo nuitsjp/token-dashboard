@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Card, Group, Image, Stack, Text } from '@mantine/core';
 import { renderStylePreview, subscribeThemeData } from '../../features/display/theme-renderer';
 import { getSettings } from '../../features/settings/queries';
-import { loadStyleCatalog, styleCatalogRefetchInterval, type StyleDefinition } from '../../features/styles/catalog';
+import { loadStyleCatalog, type StyleDefinition } from '../../features/styles/catalog';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 
 const builtins = [
@@ -24,8 +24,6 @@ export function StyleList() {
   const catalog = useQuery({
     queryKey: ['styles', 'catalog'],
     queryFn: loadStyleCatalog,
-    refetchInterval: styleCatalogRefetchInterval,
-    placeholderData: previous => previous,
   });
   const cards = useMemo(() => styleCards(catalog.data ?? []), [catalog.data]);
   const [revision, setRevision] = useState(0);

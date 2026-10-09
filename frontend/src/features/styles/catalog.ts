@@ -1,5 +1,3 @@
-import { shareTheme } from '../display/theme-renderer';
-
 export type StyleDefinition = { id: string; name: string };
 
 type Manifest = { id?: string; name?: string };
@@ -21,17 +19,7 @@ function definitions(value: unknown): StyleDefinition[] {
   return list;
 }
 
-async function loadMockCatalog(): Promise<StyleDefinition[]> {
-  shareTheme('night', 'bars');
-  const response = await fetch('/mock/style-catalog.json');
-  if (!response.ok) throw new Error('Style catalog is unavailable');
-  return definitions(await response.json());
-}
-
-// The style list reads this function only. dev:mock replaces the result with the fixed catalog.
+// Themes compiled into the app. Built-in cards are added by the list, so removing a built-in here does not drop it.
 export function loadStyleCatalog(): Promise<StyleDefinition[]> {
-  if (typeof __STYLE_CATALOG_MOCK__ !== 'undefined' && __STYLE_CATALOG_MOCK__) return loadMockCatalog();
   return Promise.resolve(definitions(Object.values(manifests)));
 }
-
-export const styleCatalogRefetchInterval = typeof __STYLE_CATALOG_MOCK__ !== 'undefined' && __STYLE_CATALOG_MOCK__ ? 500 : false;

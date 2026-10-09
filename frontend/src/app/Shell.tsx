@@ -35,7 +35,7 @@ function Content() {
         <UpdateApp />
         <ErrorNotice error={info.error || error} />
         {info.data && !info.data.diagnosticsAvailable && <Alert color="yellow">Diagnostic logs cannot be saved. Check the access rights and free space of the data folder.</Alert>}
-        <SettingsDraftProvider><Outlet /></SettingsDraftProvider>
+        <div className={styles.content}><SettingsDraftProvider><Outlet /></SettingsDraftProvider></div>
       </Stack>
     </main>
     <Modal opened={closing} onClose={() => setClosing(false)} title="Exit the application?" centered>
