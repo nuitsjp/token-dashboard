@@ -62,6 +62,15 @@ async function preview(page: Page) {
   return (await image.getAttribute('src')) ?? '';
 }
 
+async function openApp(page: Page, url: string) {
+  // Server mode connects its event WebSocket after loading the page. A retained preview
+  // can appear before that connection is ready, so wait before sending the next Hub update.
+  await Promise.all([
+    page.waitForEvent('console', { predicate: message => message.text() === '[Wails] Event WebSocket connected' }),
+    page.goto(url),
+  ]);
+}
+
 // Counts the pixels of exactly the colour in the area, and the runs of that colour along one row.
 async function look(page: Page, src: string, area: readonly [number, number, number, number], rgb: Rgb, row = panelRow) {
   return page.evaluate(async ({ src, area, rgb, row }) => {
@@ -105,7 +114,7 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
   try {
     await test.step('開始条件', async () => {
       // Precondition: the Hub connection is saved. Then the app starts as at sign-in.
-      await page.goto(server.url);
+      await openApp(page, server.url);
       await page.getByRole('link', { name: 'Connection' }).click();
       await page.getByRole('textbox', { name: 'Data source' }).click();
       await page.getByRole('option', { name: 'Hub' }).click();
@@ -123,7 +132,7 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       expect(request.path).toBe('/api/stats/stream');
       expect(request.headers.authorization).toBe(`Bearer ${token}`);
       expect(request.headers['x-token-monitor-stream']).toBe('2');
-      await page.goto(server.url);
+      await openApp(page, server.url);
       const waiting = await preview(page);
       // Waiting for Hub: no panel, no arc and no tokens.
       expect((await look(page, waiting, wholeImage, panelFill)).runs).toBe(0);
@@ -149,7 +158,7 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
     await test.step('手順3', async () => {
       await page.close();
       page = await context.newPage();
-      await page.goto(server.url);
+      await openApp(page, server.url);
       expect(await preview(page)).toBe(first);
     });
     await test.step('手順4', async () => {
@@ -163,7 +172,7 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       hub.send('stats', stats(12));
       await expect.poll(() => hub.streams()).toBe(1);
       page = await context.newPage();
-      await page.goto(server.url);
+      await openApp(page, server.url);
       await expect.poll(async () => (await look(page, await preview(page), firstPanel, danger)).count).toBeGreaterThan(100);
     });
     await test.step('手順6', async () => {
@@ -172,7 +181,7 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       server = await startServer(dataDir, 34117, shortIntervals);
     });
     await test.step('受け入れ条件', async () => {
-      await page.goto(server.url);
+      await openApp(page, server.url);
       // Nothing received is kept across a restart: the new process waits for the Hub again.
       expect((await look(page, await preview(page), wholeImage, panelFill)).runs).toBe(0);
       hub.send('snapshot', stats(12));
