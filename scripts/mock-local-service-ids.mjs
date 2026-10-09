@@ -1,4 +1,4 @@
-// Local specification mock: fixed tokscale command outputs at the external CLI boundary.
+// Local development fixture: fixed tokscale command outputs at the external CLI boundary.
 // Reuse the existing localusage test executable's command-output mode; no app mock branch.
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

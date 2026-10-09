@@ -2,7 +2,7 @@
 
 適用条件と関与コンテナは [アーキテクチャの一覧](../architecture.md#patterns) を参照します。パターンからの逸脱は対象 UC ごとに本書へ記録します。図は主成功系列を役割名で示します。
 
-| 役割 | 責務 | 実装パス（段階4完了時に記入） |
+| 役割 | 責務 | 実装パス |
 | --- | --- | --- |
 | 設定区画 | 保存済みの取得元と表示先・選択肢を表示する。表示先と表示スタイル、および3.5インチ用の向き・巡回間隔・スキップ設定・サービス別の表示内容は `Display` 画面で変更を確定した時点で反映して保存し、失敗したら従前の設定に戻してエラーを表示する。サービス別の表示内容と個別枠の選択は独立に保持する。3.5インチのサービスカードは初期状態で閉じた折りたたみ内でON/OFFと3択を選び、OFF中は最後の3択を残して操作を無効にする。画面全体のスクロールで全サービスと個別枠へ到達できるようにする。取得元と接続先の入力は `Connection` 画面で保存まで保持し、`Save` で保存する。Hub 選択時だけ接続先の入力を表示し、認証トークンは入力だけを受けて表示しない | `frontend/src/usecases/configure-hub/ConfigureHub.tsx`、`frontend/src/usecases/configure-hub/SettingsDraft.tsx`、`frontend/src/usecases/show-usage/ServiceContentSelect.tsx`、`frontend/src/usecases/show-usage/UsagePreview.tsx`、`frontend/src/app/Shell.tsx` |
 | 機能アクセス | 本体の設定サービスを呼び出し、取得結果と保存結果を画面の状態へ反映する | `frontend/src/features/settings/queries.ts` |

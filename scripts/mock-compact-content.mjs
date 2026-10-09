@@ -1,4 +1,4 @@
-// Specification mock: only the external SSE boundary supplies fixed production-shaped data.
+// Development fixture: only the external SSE boundary supplies fixed production-shaped data.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';

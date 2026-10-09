@@ -8,7 +8,7 @@
 | --- | --- |
 | 解決する問題・達成したい結果 | ローカルまたは Token Monitor Hub から取得した AI ツールのトークン利用量・推定コストと利用枠の残量を、ブラウザーやアプリの画面を開かずに、PC に接続した TURZX の USB ディスプレイで常時確認できるようにする |
 | 利用者・利用場面 | 自分の Windows PC に対応する TURZX を接続し、作業中に横目で利用状況を確認する |
-| 今回の対象 | ローカルと1つの Hub から取得元を選ぶ設定（既定はローカル）と、Hub 選択時のリアルタイム受信。9.2インチへの Tokens の Today・Month・All のトークン数と推定コスト、Usage Limits の表示。3.5インチへのサービス別の Tokens と利用枠を選択して巡回する表示（[対象シナリオ](usecases/利用状況をUSBディスプレイに表示する/scenarios/3.5インチでサービスごとの利用枠を順番に表示する.md)）。サインイン時の自動起動とタスクトレイ常駐。接続中の対応する TURZX から表示先を1台選ぶ設定（選んでいない場合は最初の1台）。プレビューと取得元の設定を1画面にまとめたウィンドウ。インストーラーによる導入。GitHub Releases を使った新版の確認と自動更新 |
+| 今回の対象 | ローカルと1つの Hub から取得元を選ぶ設定（既定はローカル）と、Hub 選択時のリアルタイム受信。9.2インチへの Tokens の Today・Month・All のトークン数と推定コスト、Usage Limits の表示。3.5インチへのサービス別の Tokens と利用枠を選択して巡回する表示（[対象シナリオ](usecases/利用状況をUSBディスプレイに表示する/scenarios/3.5インチでサービスごとの利用枠を順番に表示する.md)）。サインイン時の自動起動とタスクトレイ常駐。接続中の対応する TURZX から表示先を1台選ぶ設定（選んでいない場合は最初の1台）。DisplayとConnectionに分けた設定ウィンドウ。インストーラーによる導入。GitHub Releases を使った新版の確認と自動更新 |
 | 今回の対象外 | 複数 Hub の同時受信と合算。利用状況の保存と履歴。Hub への書き込み。端末別の内訳表示と、トークン数・コストのモデル別表示。対応する9.2インチ・3.5インチ以外の機種と、複数台への同時表示。動画（H.264）の送信。WinUSB ドライバーの導入。Windows 以外の OS。インストーラーのコード署名（Authenticode） |
 
 ## 2. 制約・品質要求・受け入れ条件
@@ -79,10 +79,10 @@
 
 作業ディレクトリはリポジトリのルートです。Go 1.26以上、`.nvmrc` と一致する Node.js、Python 3、WebView2 Runtime を用意します。インストーラーの作成には NSIS 3.11以上も必要です。
 
-段階5の起動環境は [エージェント行動指針](../AGENTS.md) に従います。ゲージ配置の完成系監査では、インストール済みアプリを終了してから、保存済みの実 Hub 接続設定を監査用ディレクトリへ複製し、今回の変更を含むデスクトップアプリを起動します。
+実機確認では、起動中のアプリを終了し、保存済みの設定を専用ディレクトリへ複製してデスクトップ版を起動します。完成系監査の環境は [エージェント行動指針](../AGENTS.md) に従います。
 
 ```powershell
-$auditDir = Join-Path (Get-Location) '.test-data/gauge-real-app'
+$auditDir = Join-Path (Get-Location) '.test-data/display-real-app'
 New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $env:APPDATA 'io.github.nuitsjp.token-monitor-turzx/settings.json') -Destination (Join-Path $auditDir 'settings.json')
 $env:WAILS_DATA_DIR = $auditDir
@@ -94,7 +94,7 @@ try {
 }
 ```
 
-トレイからウィンドウを開き、`Connection` で取得元が `Hub`、接続先が利用者の実 Hub であることを確認します。`Display` の `Gauges` で受信した利用枠の選択を切り替え、契約や円の数が変わっても円の位置が7列の格子に固定されていること、円が7つを超える契約が飛ばされて収まる契約が表示されること、Tokens の左端が先頭のパネルの左端にそろうことを確認します。自動確認は `playwright-cli attach --cdp=http://127.0.0.1:9347` でアプリの WebView2 に接続して行い、操作後は元の選択状態に戻します。アプリをトレイの `Exit` で終了し、開発起動のターミナルで Ctrl+C を押して監視プロセスも止めます。元の設定ファイルは変更しません。
+トレイからウィンドウを開き、`Connection` で保存済みの取得元を確認します。Hubを使う場合は、利用者の実Hubへ接続します。9.2インチでは`Display` の `Gauges` で受信した利用枠の選択を切り替え、契約や円の数が変わっても円の位置が7列の格子に固定されていること、円が7つを超える契約が飛ばされて収まる契約が表示されること、Tokens の左端が先頭のパネルの左端にそろうことを確認します。自動確認は `playwright-cli attach --cdp=http://127.0.0.1:9347` でアプリの WebView2 に接続して行い、操作後は元の選択状態に戻します。アプリをトレイの `Exit` で終了し、開発起動のターミナルで Ctrl+C を押して監視プロセスも止めます。元の設定ファイルは変更しません。
 
 mise を使う場合は、`mise install` で `mise.toml` の版のツールを導入し、下表の `node scripts/run.mjs <コマンド>` の代わりに `mise run <コマンド>` を実行できます（例: `mise run dev`、`mise run verify`）。`mise run release` に続けて書いた引数は、`scripts/run.mjs release` へそのまま渡します。
 
@@ -120,10 +120,43 @@ E2E（`frontend/tests/e2e/`）はブラウザーから検証用サーバー（`-
 
 3.5インチのE2Eは、外部のSSE送信側に複数サービス・契約・枠の固定データを置き、本番の設定保存・ページ構成・描画からプレビューまでを検証します。LocalのID対応は、既存のlocalusageテスト実行ファイルを外部CLI境界で使い、8組のサービス別TokensをHubの完全一致による画像と比較します。設定キーの優先順位、旧形式の復元、保存失敗、サービスのON/OFFと個別枠の独立性も確認します。境界値、同率の契約順、複数契約のスキップ判定、データ更新中の巡回期限、再接続時の現在ページ、送信待ち画像の表示先保持は、Goのテスト（`internal/display`・`internal/settings`）で検証します。4方向のRev. Aコマンド、RGB565の色・バイト順、COMインターフェースからのUSB識別子の復元は `internal/turzx` で検証します。
 
-3.5インチの完成系監査は、変更済みデスクトップアプリを対象の USB シリアル機器につなぎ、保存済みの取得元設定で行います。今回の系列では利用者の指示により実 Hub の確認を省略します。Display で3.5インチを選び、4方向と両スタイルのサービス別 Tokens と3枠の同時表示、大型版と同じ重ね方とTokens併記時の3円の2列2段、サービスカードのON/OFFと3択、OFF中のグレーアウトと最後の選択保持、巡回間隔、5h残量100%のサービスのスキップ、再起動後の設定復元を確認します。プレビューと実機のページ・値・配置が一致し、選択した設置方向で実機の文字が正立することを確認します。抜き差し後はその時点のページから再開することを確認します。設定の保存成功は画面と設定ファイルで、機器への送信成功は診断ログの turzx_frame_sent と実機の目視で確認します。
+3.5インチの完成系監査は、変更済みデスクトップアプリを対象の USB シリアル機器につなぎ、保存済みの取得元設定で行います。Display で3.5インチを選び、4方向と両スタイルのサービス別 Tokens と3枠の同時表示、大型版と同じ重ね方とTokens併記時の3円の2列2段、サービスカードのON/OFFと3択、OFF中のグレーアウトと最後の選択保持、巡回間隔、5h残量100%のサービスのスキップ、再起動後の設定復元を確認します。プレビューと実機のページ・値・配置が一致し、選択した設置方向で実機の文字が正立することを確認します。抜き差し後はその時点のページから再開することを確認します。設定の保存成功は画面と設定ファイルで、機器への送信成功は診断ログの turzx_frame_sent と実機の目視で確認します。
 
-3.5インチの表示内容を確認する仕様モックは、デスクトップアプリと既存の検証用サーバーを終了し、`node scripts/run.mjs generate`、`npm --prefix frontend run build`、`node scripts/build.mjs server` の順にビルドしてから `node scripts/mock-compact-content.mjs` で起動します。UI は `http://127.0.0.1:34127/#/` です。Connection で取得元を Hub、URL を `http://127.0.0.1:34128`、確認専用トークンを `compact-content-mock` にして保存します。初期状態は取得前です。別の PowerShell で `Invoke-RestMethod http://127.0.0.1:34128/scenario/normal` を実行すると通常データへ切り替わります。末尾を `services` にすると7サービスと長い報告IDを再現できます。末尾を `three`、`sameGroupThree`、`pairedThree`、`largeThree`、`overflow`、`unknown`、`noLimits`、`large`、`empty`、`full` にすると、独立した3円、同じグループの3枠を2円へ重ねる表示、各円2枠の3円、大きい数値と3円、容量超過、未報告と明示0、利用枠なし、大きい数値、サービスなし、5h残量100%を再現できます。初期状態で閉じた Service content を開き、サービスカードのToggleでON/OFFを切り替え、Both・Limits・Tokensを選びます。サービスのON/OFFと最後の表示内容は、本番の保存処理で専用設定ファイルへ保存します。OFF中も選択は残り、ONで再開します。モック起動スクリプトは毎回初期設定を作るため、再起動後の復元を確認するときは同じ `WAILS_DATA_DIR` で検証用サーバーだけを起動し直します。全スキップ表示は `full` でスキップ設定をオンにします。固定データを供給するのは外部の SSE 境界だけで、本番の `usage.Stats` と設定・巡回・描画・プレビュー処理を使います。モックは専用の設定・一時ホーム領域を使い、実機へ送信しません。Ctrl+C でモックと検証用サーバーを終了します。実処理の確認ではモックを終了し、デスクトップアプリを保存済みの取得元へ接続して起動します。
+### 固定データで3.5インチを確認する
+
+開発用ツールは外部のSSEまたはCLI境界から固定データを供給し、本番の取得・集計・設定保存・巡回・描画・プレビュー処理を使います。専用の設定・ホーム領域を使い、実機へは送信しません。起動するたびに専用設定を初期化するため、実際の利用設定には使わないでください。
+
+デスクトップアプリと既存の検証用サーバーを終了し、Windowsで次を実行します。
+
+```powershell
+node scripts/run.mjs generate
+npm --prefix frontend run build
+node scripts/build.mjs server
+```
+
+次のどちらか1本を起動します。画面URLはともに `http://127.0.0.1:34127/`、終了はCtrl+Cです。
+
+| 確認対象 | 起動コマンド | 取得元と固定データ |
+| --- | --- | --- |
+| 表示・設定・巡回 | `node scripts/mock-compact-content.mjs` | ConnectionでHub、URL `http://127.0.0.1:34128`、トークン `compact-content-mock` を保存。初期状態は取得前 |
+| LocalのサービスID対応 | `node scripts/mock-local-service-ids.mjs` | 初期設定のLocalを使用。既存のlocalusageテスト実行ファイルがtokscaleの固定応答を返す |
+
+SSE側のデータは別のPowerShellから `Invoke-RestMethod http://127.0.0.1:34128/scenario/normal` で切り替えます。末尾で次の条件を選べます。
+
+| 末尾 | 条件 |
+| --- | --- |
+| `normal` / `services` | 通常データ／7サービスと長いID |
+| `three` / `sameGroupThree` / `pairedThree` | 独立した3円／同じグループの3枠／各円2枠の3円 |
+| `largeThree` / `large` / `overflow` | 大きい数値と3円／大きい数値／ページ容量超過 |
+| `unknown` / `noLimits` / `empty` | 未報告と明示0／利用枠なし／サービスなし |
+| `full` | 5h残量100%。スキップ設定をオンにすると全スキップ表示 |
+
+Service contentを開き、ToggleとBoth・Limits・Tokensを切り替えます。ON/OFFと最後の表示内容は本番処理で専用設定へ保存します。再起動後の復元は、起動スクリプトを再実行せず、同じ `WAILS_DATA_DIR` で検証用サーバーだけを起動し直して確認します。
+
+Local側では、Codexの2契約と小文字IDのTokens、大小文字の設定競合、Claudeの小文字旧設定からの復元、対応表8組、TokensだけのAmp、未知のFooとfoo、別ツールのantigravity-cliとopencodeを確認できます。ClaudeをOFFにするとCodexのTokensが1ページのまま維持され、CodexをBothにするとサービス全体のTokensを契約ごとの利用枠と併記します。
+
+実データを確認するときはツールを終了し、保存済みの取得元でデスクトップ版を起動します。
+
+### 3.5インチ実機のリセットと再接続
 
 3.5インチのリセット後の再接続を自動確認する場合は、現在のプレビューPNGをリポジトリ外の一時領域に保存し、COMポートを使うアプリを終了してから実行します。`TURZX_FRAME_FILE` にそのPNGの絶対パス、`TURZX_FRAME_ORIENTATION` に設定ファイルの `orientation` と同じ値、`TURZX_SERIAL_TEST` に `1` を指定し、`go test -count=1 -run TestSerialReconnectConnectedCompactDisplay -v ./internal/turzx` を実行します。接続した対象機器への送信、リセット、同じUSB識別子による再オープンと再送が成功することを確認します。終了後は3つの環境変数を除き、アプリを再起動します。このテストは `verify` ではスキップし、物理的な抜き差しやCOM番号の変更の確認は実機で別に行います。
-
-Localの3.5インチのサービスID対応付けを確認する場合は、上記と同じ生成・画面・検証用サーバーのビルド後に、Windowsで `node scripts/mock-local-service-ids.mjs` を起動します。UIは `http://127.0.0.1:34127/`、取得元は初期設定のLocalのままです。既存のlocalusageテスト実行ファイルが外部CLI境界でtokscaleの固定応答を返し、アプリ内の集計・設定保存・ページ構成・描画は本番処理です。Codexは2契約と小文字IDのTokensを持ち、大小文字の保存設定が競合している状態から利用枠側のON・Tokensを引き継ぎます。Claudeは小文字の旧設定だけからON・Limitsを引き継ぎます。8組の対応表、TokensだけのAmp、未知のFooとfoo、別ツールのantigravity-cliとopencodeを確認できます。Service contentでClaudeをOFFにするとCodexのTokensが1ページのまま維持され、CodexをBothにすると同じサービスのTokensを契約ごとの利用枠と併記します。設定は専用領域だけを使い、実機へ送信しません。Ctrl+Cで終了します。Hub側の完全一致や他の配置を確認する場合はこのモックを終了し、既存のSSEモックを起動します。
