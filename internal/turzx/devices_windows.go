@@ -22,6 +22,8 @@ var (
 // the GUID chosen when the WinUSB driver was installed.
 var usbDeviceInterface = syscall.GUID{Data1: 0xa5dcbf10, Data2: 0x6530, Data3: 0x11d2, Data4: [8]byte{0x90, 0x1f, 0x00, 0xc0, 0x4f, 0xb9, 0x51, 0xed}}
 
+var comDeviceInterface = syscall.GUID{Data1: 0x86e0d1e0, Data2: 0x8089, Data3: 0x11d0, Data4: [8]byte{0x9c, 0xe4, 0x08, 0x00, 0x3e, 0x30, 0x1f, 0x73}}
+
 // DEVPKEY_Device_BusReportedDeviceDesc: the product string the device reports over USB.
 var busReportedDeviceDesc = struct {
 	fmtid syscall.GUID
@@ -59,13 +61,31 @@ func List() ([]Device, error) {
 }
 
 func interfacePaths() ([]string, error) {
+	usb, err := pathsFor(&usbDeviceInterface)
+	if err != nil {
+		return nil, err
+	}
+	serial, err := pathsFor(&comDeviceInterface)
+	if err != nil {
+		return nil, err
+	}
+	// Only the COM interface is usable for compact models; their USB interface is not WinUSB.
+	usb = slices.DeleteFunc(usb, func(path string) bool { id, _ := deviceID(path); return IsCompact(id) })
+	serial = slices.DeleteFunc(serial, func(path string) bool { id, _ := deviceID(path); return !IsCompact(id) })
+	return append(usb, serial...), nil
+}
+
+func pathsFor(guid *syscall.GUID) ([]string, error) {
 	for {
 		var size uint32
-		if r, _, _ := procListSize.Call(uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&usbDeviceInterface)), 0, 0); r != crSuccess {
+		if r, _, _ := procListSize.Call(uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(guid)), 0, 0); r != crSuccess {
 			return nil, fmt.Errorf("CM_Get_Device_Interface_List_SizeW: CONFIGRET=0x%X", r)
 		}
 		buffer := make([]uint16, size)
-		r, _, _ := procList.Call(uintptr(unsafe.Pointer(&usbDeviceInterface)), 0, uintptr(unsafe.Pointer(&buffer[0])), uintptr(size), 0)
+		if size == 0 {
+			return nil, nil
+		}
+		r, _, _ := procList.Call(uintptr(unsafe.Pointer(guid)), 0, uintptr(unsafe.Pointer(&buffer[0])), uintptr(size), 0)
 		if r == crBufferSmall {
 			continue // The list changed between the two calls.
 		}
@@ -79,7 +99,7 @@ func interfacePaths() ([]string, error) {
 				continue
 			}
 			if i > start {
-				if path := syscall.UTF16ToString(buffer[start:i]); strings.Contains(strings.ToLower(path), target) {
+				if path := syscall.UTF16ToString(buffer[start:i]); strings.Contains(strings.ToLower(path), target) || strings.Contains(strings.ToLower(path), "vid_1a86&pid_5722") {
 					paths = append(paths, path)
 				}
 			}

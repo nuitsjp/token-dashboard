@@ -42,9 +42,11 @@ type pipeInformation struct {
 
 // Conn is an open connection to one TURZX display.
 type Conn struct {
-	file    syscall.Handle
-	usb     uintptr
-	in, out uint8
+	file        syscall.Handle
+	usb         uintptr
+	in, out     uint8
+	serial      bool
+	orientation string
 }
 
 // Open opens the display whose device instance ID (Device.ID from List) is id,
@@ -56,6 +58,9 @@ func Open(id string) (*Conn, error) {
 	}
 	for _, path := range paths {
 		if pathID, err := deviceID(path); err == nil && pathID == id {
+			if IsCompact(id) {
+				return openSerial(path)
+			}
 			return openPath(path)
 		}
 	}
@@ -117,6 +122,9 @@ func (c *Conn) init() error {
 // SendJPEG sends one 462x1920 baseline JPEG (<= 1 MiB) and waits for the
 // device's success response.
 func (c *Conn) SendJPEG(data []byte) error {
+	if c.serial {
+		return errors.New("JPEG requires a 9.2-inch display")
+	}
 	if err := validateJPEG(data); err != nil {
 		return err
 	}
@@ -126,6 +134,9 @@ func (c *Conn) SendJPEG(data []byte) error {
 // Restart asks the display to restart (command 11). It does not wait for a
 // response because the device may disconnect.
 func (c *Conn) Restart() error {
+	if c.serial {
+		return c.serialWrite(serialCommand(101, 0, 0))
+	}
 	p, _ := packet(cmdRestart, nil, time.Now())
 	return c.write(p)
 }
