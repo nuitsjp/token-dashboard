@@ -36,6 +36,7 @@
 | [利用状況の取得元と表示先を設定する](usecases/利用状況の取得元と表示先を設定する/README.md) | 利用者 | 利用状況の取得元と、表示先の TURZX を設定する | 1 | [UCP-2](design/UCP-2.md) | 対象 |
 | [利用状況をUSBディスプレイに表示する](usecases/利用状況をUSBディスプレイに表示する/README.md) | 利用者 | 選択した取得元の最新のトークン数・推定コストと利用枠を、TURZX とプレビューに常時表示する | 2 | [UCP-1](design/UCP-1.md) | 対象 |
 | [新版を確認してアプリを更新する](usecases/新版を確認してアプリを更新する/README.md) | 利用者 | 起動時にバックグラウンドで GitHub Releases の新版を検出し、利用者の確認後にアプリを更新する | 3 | [UCP-3](design/UCP-3.md) | 対象 |
+| [Style一覧を閲覧する](usecases/Style一覧を閲覧する/README.md) | 利用者 | アプリに定義された表示スタイルを、現在の表示を変えずに見比べる | 4 | [UCP-1](design/UCP-1.md) | 対象 |
 
 常駐（タスクトレイ、ウィンドウの表示・非表示、終了）は独立したユースケースにせず、「利用状況をUSBディスプレイに表示する」の操作の一部として扱います。
 
@@ -103,6 +104,7 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存（同梱用 tokscale を含む）、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | 開発用の Vite はポート 9345 を使います（Wails の既定の 9245 は、ほかの Wails プロジェクトと重なりやすいため変えています）。アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
+| スタイル一覧のモック | `node scripts/run.mjs dev:mock` | `dev` と同じ起動で、Styles の定義一覧だけ `frontend/mocks/style-catalog.json` を使います。`Night` は Bars のテンプレートで描きます。ファイルから `Night` を除くと、そのカードが消え、`Gauges` と `Bars` は残ります。追加するとカードが戻ります。`dev` と本番ビルドはこのファイルを読まず、ビルドに含まれるテーマ定義を一覧にします。本番ビルドで `WAILS_FRONTEND_MODE=mock` を付けると、画面のビルドを止めます |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します。生成のあと、画面の検査と検証用サーバーのビルド、Go のテスト、vet、文書検査を並列に実行し、出力の各行に `[check:go]` のようにタスク名を付けます |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |

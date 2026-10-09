@@ -16,12 +16,40 @@ type Manifest = {
 const manifests = import.meta.glob<Manifest>('../../../../themes/*/theme.json', { eager: true, import: 'default' });
 const specifications = import.meta.glob<Parameters<typeof Handlebars.template>[0]>('../../../../themes/*/*.hbs', { eager: true, import: 'default' });
 const stylesheets = import.meta.glob<string>('../../../../themes/*/*.css', { eager: true, query: '?raw', import: 'default' });
+type LoadedTheme = { template: Handlebars.TemplateDelegate<ThemeData>; stylesheet: string; shrinkTokens: boolean };
+
 const themes = new Map(Object.entries(manifests).map(([path, manifest]) => {
   const directory = path.slice(0, path.lastIndexOf('/') + 1);
   const specification = specifications[directory + manifest.template];
   const stylesheet = stylesheets[directory + manifest.stylesheet];
-  return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet }];
+  return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet, shrinkTokens: manifest.id === 'bars' }] as [string, LoadedTheme];
 }));
+
+export function shareTheme(id: string, sourceId: string) {
+  const source = themes.get(sourceId);
+  if (!source) throw new Error(`Unknown display theme: ${sourceId}`);
+  themes.set(id, { ...source });
+}
+
+let gate = Promise.resolve();
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const result = gate.then(work, work);
+  gate = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+let latest: ThemeData | undefined;
+const themeDataListeners = new Set<() => void>();
+export function subscribeThemeData(onChange: () => void) {
+  themeDataListeners.add(onChange);
+  return () => { themeDataListeners.delete(onChange); };
+}
+
+let renderPreview: ((themeId: string) => Promise<string>) | undefined;
+export function renderStylePreview(themeId: string) {
+  if (!renderPreview) return Promise.reject(new Error('Renderer is not started'));
+  return renderPreview(themeId);
+}
 
 function surface(width: number, height: number) {
   const canvas = document.createElement('canvas');
@@ -49,16 +77,17 @@ export async function startThemeRenderer() {
   let requested = false;
   let completedID = 0;
 
-  async function render(request: FrameRequest) {
+  async function draw(themeId: string, data: ThemeData, withJpeg: boolean) {
     // Subscribe first so a failed initial asset request can be retried by the next frame.
     if (icons === undefined) {
       [icons] = await Promise.all([Display.AgentIcons(), document.fonts.load('500 22px "Yu Gothic"'), document.fonts.load('700 42px "Yu Gothic"')]);
     }
-    const theme = themes.get(request.theme);
-    if (!theme) throw new Error(`Unknown display theme: ${request.theme}`);
+    const theme = themes.get(themeId);
+    if (!theme) throw new Error(`Unknown display theme: ${themeId}`);
+    const view = structuredClone(data);
     // Bars keep the existing shrinking rule for large token totals.
-    if (request.theme === 'bars') {
-      for (const token of request.data.tokens!) {
+    if (theme.shrinkTokens) {
+      for (const token of view.tokens!) {
         let size = 42;
         while (size > 20) {
           drawing.context.font = `700 ${size}px "Yu Gothic"`;
@@ -68,7 +97,7 @@ export async function startThemeRenderer() {
         token.tokensFontSize = size;
       }
     }
-    const parsed = new DOMParser().parseFromString(theme.template(request.data), 'text/html');
+    const parsed = new DOMParser().parseFromString(theme.template(view), 'text/html');
     for (const image of parsed.querySelectorAll('img')) {
       const source = image.getAttribute('src')!;
       if (source.startsWith('data:image/')) continue;
@@ -95,15 +124,32 @@ export async function startThemeRenderer() {
     drawing.context.fillStyle = '#000';
     drawing.context.fillRect(0, 0, 1920, 462);
     drawing.context.drawImage(image, 0, 0);
-    rotated.context.setTransform(1, 0, 0, 1, 0, 0);
-    rotated.context.translate(462, 0);
-    rotated.context.rotate(Math.PI / 2);
-    rotated.context.drawImage(drawing.canvas, 0, 0);
+    let jpeg = '';
+    if (withJpeg) {
+      rotated.context.setTransform(1, 0, 0, 1, 0, 0);
+      rotated.context.translate(462, 0);
+      rotated.context.rotate(Math.PI / 2);
+      rotated.context.drawImage(drawing.canvas, 0, 0);
+      jpeg = encode(rotated.canvas, 'image/jpeg');
+    }
     const png = encode(drawing.canvas, 'image/png');
-    const jpeg = encode(rotated.canvas, 'image/jpeg');
     image.removeAttribute('src');
-    await Display.CompleteFrame(request.id, png, jpeg, '');
+    return { png, jpeg };
   }
+
+  async function render(request: FrameRequest) {
+    const snapshot = structuredClone(request.data);
+    latest = snapshot;
+    for (const listener of themeDataListeners) listener();
+    const frame = await enqueue(() => draw(request.theme, snapshot, true));
+    await Display.CompleteFrame(request.id, frame.png, frame.jpeg, '');
+  }
+
+  renderPreview = (themeId: string) => enqueue(async () => {
+    if (!latest) throw new Error('No display image yet');
+    const frame = await draw(themeId, latest, false);
+    return `data:image/png;base64,${frame.png}`;
+  });
 
   async function pump() {
     requested = true;

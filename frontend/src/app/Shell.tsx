@@ -26,6 +26,7 @@ function Content() {
   return <div className={styles.shell}>
     <nav className={styles.side} aria-label="Menu">
       <NavLink component={Link} to="/" label="Display" leftSection={icon('M3 4h18v12H3zM8 20h8M12 16v4')} activeOptions={{ exact: true }} />
+      <NavLink component={Link} to="/styles" label="Styles" leftSection={icon('M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z')} />
       <NavLink component={Link} to="/connection" label="Connection" leftSection={icon('M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01')} />
       <Text size="xs" c="dimmed" className={styles.version}>{info.data ? `Version ${info.data.version}` : ''}</Text>
     </nav>
