@@ -63,12 +63,17 @@ async function preview(page: Page) {
 }
 
 async function openApp(page: Page, url: string) {
-  // Server mode connects its event WebSocket after loading the page. A retained preview
-  // can appear before that connection is ready, so wait before sending the next Hub update.
+  // Server mode connects its event WebSocket after loading the page. A periodic redraw
+  // can be missed before connection, so wait for this renderer to finish a frame afterward.
   await Promise.all([
     page.waitForEvent('console', { predicate: message => message.text() === '[Wails] Event WebSocket connected' }),
     page.goto(url),
   ]);
+  await page.waitForResponse(response => {
+    const payload = response.request().postDataJSON();
+    return response.ok() && payload?.args?.methodName === 'token-monitor-turzx/internal/display.Service.CompleteFrame'
+      && payload.args.args[3] === '';
+  }, { timeout: 20_000 });
 }
 
 // Counts the pixels of exactly the colour in the area, and the runs of that colour along one row.
@@ -159,7 +164,11 @@ test('起動して、Hub の最新の利用状況をゲージでプレビュー�
       await page.close();
       page = await context.newPage();
       await openApp(page, server.url);
-      expect(await preview(page)).toBe(first);
+      // The reset countdown can advance while reopening; the displayed usage stays the same.
+      const reopened = await preview(page);
+      expect(await inked(page, reopened, tokensStrip)).toBe(await inked(page, first, tokensStrip));
+      expect((await look(page, reopened, firstPanel, danger)).count).toBe((await look(page, first, firstPanel, danger)).count);
+      expect((await look(page, reopened, secondPanel, normal)).count).toBe((await look(page, first, secondPanel, normal)).count);
     });
     await test.step('手順4', async () => {
       hub.send('stats', stats(60));
