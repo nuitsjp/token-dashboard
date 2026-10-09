@@ -15,9 +15,9 @@
 - Hub の認証トークンは画面・ログに表示せず、本体から画面へ返さない。Hub の URL と認証トークンを保存する場合は、一組にして Windows の DPAPI でユーザー単位に暗号化する。
 - 選択した取得元で取得に失敗しても、別の取得元へ自動では切り替えない。
 - 画面の見出しと項目名は英語で表示する。
-- ウィンドウは左の縦メニューで `Display` 画面と `Connection` 画面を切り替える。`Display` 画面には、上から `Style`（利用枠の表示スタイル `Display style` の選択とプレビュー）と `Usage Limits`（表示する契約と枠の選択）を置き、見出し `Display settings` と同じ段の右端に `Output`（出力先 `Output device`）を置き、`Connection` 画面には取得元 `Data source` と Hub の接続先を置く。
+- ウィンドウは左の縦メニューで `Display` 画面、`Styles` 画面、`Connection` 画面を切り替える。`Display` 画面には、上から `Style`（利用枠の表示スタイル `Display style` の選択とプレビュー）と `Usage Limits`（表示する契約と枠の選択）を置き、見出し `Display settings` と同じ段の右端に `Output`（出力先 `Output device`）を置き、`Styles` 画面は [Style一覧を閲覧する](../Style一覧を閲覧する/README.md) に従い、`Connection` 画面には取得元 `Data source` と Hub の接続先を置く。
 - `Display` 画面の項目は `Save` なしで、選んだ時点で反映して保存する。保存に成功したときは完了の表示を出さない。保存に失敗した場合は、選択を保存前の値に戻し、エラーを表示する。`Connection` 画面は `Save` を置き、取得元・Hub の URL・認証トークンを保存し、保存したら「Saved.」を表示する。入力は画面を切り替えても保持し、保存していない入力は他画面の操作で保存しない。
-- 更新の区画は、どちらの画面でも先頭に表示する。
+- 更新の区画は、いずれの画面でも先頭に表示する。
 
 ## シナリオ
 - [ローカルを取得元にして表示先を保存する](scenarios/ローカルを取得元にして表示先を保存する.md)
