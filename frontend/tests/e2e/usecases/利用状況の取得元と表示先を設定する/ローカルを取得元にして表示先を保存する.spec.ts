@@ -47,7 +47,7 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await open('Display');
       await device.click();
       await expect(page.getByRole('option', { name: 'Automatic' })).toBeVisible();
-      const connected = page.getByRole('option', { name: /^TURZX.*\([0-9A-F]{8}\)$/ });
+      const connected = page.getByRole('option', { name: /^TURZX.*\([0-9A-Z]{8}\)$/ });
       if (await connected.count()) selectedDevice = (await connected.first().textContent())?.trim() ?? 'Automatic';
       await page.keyboard.press('Escape');
     });
@@ -77,7 +77,8 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await expect.poll(() => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8')).displayName || 'Automatic').toBe(selectedDevice);
       const saved = JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
       expect(saved.displayName || 'Automatic').toBe(selectedDevice);
-      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);
+      const wide = await page.getByRole('img', { name: 'Display preview' }).evaluate(image => (image as HTMLImageElement).naturalWidth === 1920);
+      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual(wide ? [42, 47, 58] : [15, 17, 23]);
     });
     await test.step('手順4', async () => {
       await server.stop();
@@ -94,7 +95,8 @@ test('Local と表示先を保存し、再起動後もローカルの利用状�
       await expect(page.getByLabel(/Access token/)).toHaveCount(0);
       await expect(page.getByRole('heading', { name: 'Usage source' })).toBeVisible();
       await open('Display');
-      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual([42, 47, 58]);
+      const wide = await page.getByRole('img', { name: 'Display preview' }).evaluate(image => (image as HTMLImageElement).naturalWidth === 1920);
+      await expect.poll(() => divider(page), { timeout: 90_000 }).toEqual(wide ? [42, 47, 58] : [15, 17, 23]);
       await expect(page.getByRole('heading', { name: 'Output' })).toBeVisible();
     });
   } finally {

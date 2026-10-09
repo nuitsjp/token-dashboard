@@ -17,7 +17,7 @@ func TestListConnected(t *testing.T) {
 	if err != nil || len(devices) == 0 {
 		t.Fatalf("List = %v, %v", devices, err)
 	}
-	name := regexp.MustCompile(`^.+ \([0-9A-F]{8}\)$`)
+	name := regexp.MustCompile(`^.+ \([0-9A-Z]{8}\)$`)
 	for _, d := range devices {
 		if !name.MatchString(d.Name) {
 			t.Errorf("unexpected name %q", d.Name)

@@ -114,6 +114,7 @@ func run() error {
 	}
 	controls := &desktop.Controls{Emit: emit}
 	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
+	usageState := usage.NewState()
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
 	updateConfig := updates.Config{
@@ -121,12 +122,42 @@ func run() error {
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
-	usageState := usage.NewState()
+	compactRenderer, err := display.NewRenderer()
+	if err != nil {
+		return err
+	}
 	displayService := &display.Service{State: usageState, Logger: logger,
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
-		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
+		Content: func() (map[string]display.ServiceContent, error) {
+			saved, err := settings.CompactServices(settingsService)
+			content := make(map[string]display.ServiceContent, len(saved))
+			for id, choice := range saved {
+				content[id] = display.ServiceContent{Provider: id, Enabled: choice.Enabled, ShowLimits: choice.ShowLimits == nil || *choice.ShowLimits, ShowTokens: choice.ShowTokens == nil || *choice.ShowTokens}
+			}
+			return content, err
+		},
+		SaveContent: func(id string, enabled, limits, tokens bool) error {
+			return settings.SetCompactService(settingsService, id, enabled, limits, tokens)
+		},
+		Show: func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
+	displayService.Options = func() (display.Options, error) {
+		view, err := settingsService.Get()
+		if err != nil {
+			return display.Options{}, err
+		}
+		id := view.DisplayID
+		if id == "" && len(view.Displays) > 0 {
+			id = view.Displays[0].DeviceID
+		}
+		connected := slices.ContainsFunc(view.Displays, func(d settings.Display) bool { return d.DeviceID == id && d.Connected })
+		selection, err := display.Selection(displayService)
+		if err != nil {
+			return display.Options{}, err
+		}
+		return display.Options{DeviceID: id, DeviceConnected: connected, Compact: turzx.IsCompact(id), Orientation: view.Orientation, Interval: time.Duration(view.RotationIntervalSeconds) * time.Second, SkipFull5hServices: view.SkipFull5hServices, Style: display.ParseStyle(view.LimitStyle), ServiceContent: selection}, nil
+	}
 	renderer := display.NewCanvasRenderer(displayService, emit)
-	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
+	output := display.NewOutput(displayService.Options, usageState.Touch, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	options := application.Options{
@@ -160,13 +191,14 @@ func run() error {
 		}}
 	}
 	app = application.New(options)
-	sink := func([]byte) {}
+	sink := func(display.Frame) {}
 	if !serverMode {
 		go output.Run(ctx)
 		sink = output.Submit
 	}
 	settingsService.OnStyleSaved = usageState.Touch
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	settingsService.OnDisplaySaved = usageState.Touch
+	go display.Run(ctx, displayService, renderer, compactRenderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {

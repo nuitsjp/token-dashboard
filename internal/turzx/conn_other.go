@@ -15,6 +15,8 @@ func Open(id string) (*Conn, error) {
 // SendJPEG sends one 462x1920 baseline JPEG (<= 1 MiB).
 func (c *Conn) SendJPEG(data []byte) error { return errors.ErrUnsupported }
 
+func (c *Conn) SendRGB565(data []byte, orientation string) error { return errors.ErrUnsupported }
+
 // Restart asks the display to restart.
 func (c *Conn) Restart() error { return errors.ErrUnsupported }
 

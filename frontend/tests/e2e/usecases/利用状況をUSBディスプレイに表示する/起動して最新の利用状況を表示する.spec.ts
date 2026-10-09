@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { selectWideDisplay, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
@@ -113,6 +113,7 @@ async function inked(page: Page, src: string, area: readonly [number, number, nu
 test('起動して、Hub の最新の利用状況をゲージでプレビューに表示し続ける', async ({ page, context }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-usage-e2e-'));
+  selectWideDisplay(dataDir);
   const hub = await startHub();
   // The server redraws every second instead of every minute.
   let server = await startServer(dataDir, 34117, shortIntervals);

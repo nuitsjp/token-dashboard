@@ -15,7 +15,7 @@ export function UsagePreview({ title, control, children }: { title: string; cont
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio: '1920 / 462' }} />
+      ? <Image src={preview.data} alt="Display preview" radius="sm" fit="contain" style={{ width: 'auto', maxWidth: '100%', maxHeight: 360, marginInline: 'auto' }} />
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }

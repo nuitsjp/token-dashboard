@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
 import { ErrorNotice } from '../../shared/ErrorNotice';
+import { ServiceContentSelect } from '../show-usage/ServiceContentSelect';
 import { automatic, useSettingsDraft } from './SettingsDraft';
 import styles from './ConfigureHub.module.css';
 
@@ -70,12 +71,43 @@ export function DisplaySettings() {
     { value: automatic, label: 'Automatic' },
     ...displays.map(d => ({ value: d.deviceID, label: d.connected ? d.name : `${d.name} (Disconnected)` })),
   ];
-  return <Stack gap={4} align="flex-end">
-    <Group wrap="nowrap" gap="sm">
+  return <Stack gap={4} align="flex-end" w={draft.compact ? 350 : undefined} maw={draft.compact ? '100%' : undefined}>
+    <Group wrap={draft.compact ? 'wrap' : 'nowrap'} justify={draft.compact ? 'flex-end' : undefined} gap="sm" maw={draft.compact ? '100%' : undefined}>
       <Title order={5}>Output</Title>
-      <Select w={280} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
+      <Select w={280} maw={draft.compact ? '100%' : undefined} aria-label="Output device" data={options} value={draft.display} allowDeselect={false} error={draft.fields.displayID}
         onChange={value => { if (value) draft.setDisplay(value); }} />
     </Group>
     {displays.length === 0 && <Text size="xs" c="dimmed">No TURZX display is connected.</Text>}
   </Stack>;
+}
+
+function RotationControls() {
+  const draft = useSettingsDraft()!;
+  const [interval, setInterval] = useState<string | number>(draft.interval);
+  useEffect(() => setInterval(draft.interval), [draft.interval]);
+  return <Card withBorder padding="md" className={styles.compact}>
+    <Title order={4} mb="sm">3.5-inch display</Title>
+    <div className={styles.rotation}>
+      <Select label="Orientation" aria-label="Orientation" data={[
+        { value: 'Landscape', label: 'Landscape' },
+        { value: 'ReverseLandscape', label: 'Landscape (180°)' },
+        { value: 'Portrait', label: 'Portrait' },
+        { value: 'ReversePortrait', label: 'Portrait (180°)' },
+      ]}
+        value={draft.orientation} allowDeselect={false} disabled={draft.saving} error={draft.fields.orientation}
+        onChange={value => { if (value) draft.setOrientation(value); }} />
+      <NumberInput label="Rotation interval (seconds)" aria-label="Rotation interval (seconds)" value={interval}
+        min={5} max={300} allowDecimal={false} allowNegative={false} clampBehavior="none" disabled={draft.saving}
+        error={draft.fields.rotationIntervalSeconds} onChange={setInterval}
+        onBlur={() => { if (interval !== draft.interval) draft.setInterval(typeof interval === 'number' ? interval : 0); }} />
+    </div>
+    <Switch label="Skip services with full 5h limits" checked={draft.skipFull} disabled={draft.saving}
+      onChange={event => draft.setSkipFull(event.currentTarget.checked)} />
+    <ServiceContentSelect />
+  </Card>;
+}
+
+export function CompactSettings() {
+  const draft = useSettingsDraft();
+  return draft?.compact ? <RotationControls /> : null;
 }

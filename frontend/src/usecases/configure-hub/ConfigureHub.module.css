@@ -2,3 +2,6 @@
 .row:first-of-type { border-top: 0; }
 .bar { border-top: 1px solid var(--mantine-color-dark-5); }
 @media(max-width: 760px) { .row { grid-template-columns: 1fr; gap: 8px; } }
+.compact { container-name: compact-settings; container-type: inline-size; }
+.rotation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 20px; }
+@container compact-settings (min-width: 520px) { .rotation { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

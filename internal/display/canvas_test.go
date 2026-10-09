@@ -179,7 +179,7 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			updated := make(chan struct{}, 1)
 			done := make(chan struct{})
 			go func() {
-				Run(ctx, s, r, state, redraw, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
+				Run(ctx, s, r, nil, state, redraw, func() Style { return Gauges }, func(frame Frame) { output <- frame.JPEG }, func(string, any) { updated <- struct{}{} }, s.Logger)
 				close(done)
 			}()
 			t.Cleanup(func() {
@@ -228,10 +228,10 @@ func TestCanvasRejectsInvalidImageDimensions(t *testing.T) {
 }
 
 func TestOutputKeepsTheNewestEncodedJPEG(t *testing.T) {
-	o := NewOutput(nil, nil)
-	o.Submit([]byte("first"))
-	o.Submit([]byte("latest"))
-	if got := string(<-o.pending); got != "latest" || len(o.pending) != 0 {
+	o := NewOutput(nil, nil, nil)
+	o.Submit(Frame{JPEG: []byte("first")})
+	o.Submit(Frame{JPEG: []byte("latest")})
+	if got := string((<-o.pending).JPEG); got != "latest" || len(o.pending) != 0 {
 		t.Fatalf("pending image: %q", got)
 	}
 }

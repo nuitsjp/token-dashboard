@@ -24,12 +24,6 @@ type FrameRequest struct {
 	Data  ThemeData `json:"data"`
 }
 
-// Frame contains two encodings of the same Canvas drawing.
-type Frame struct {
-	PNG  []byte
-	JPEG []byte
-}
-
 type frameResult struct {
 	frame Frame
 	err   error

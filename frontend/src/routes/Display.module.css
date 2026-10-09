@@ -1,0 +1,3 @@
+.page { flex: 1; min-height: 0; }
+.page[data-compact] { flex: none; min-height: auto; }
+.page[data-compact] > * { flex-shrink: 0; }
