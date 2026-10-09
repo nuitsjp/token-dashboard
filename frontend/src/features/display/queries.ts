@@ -8,6 +8,15 @@ export const subscribePreview = (handler: () => void) => Events.On('display:upda
 
 export const limitsKey = ['display', 'limits'] as const;
 export const getLimits = () => queryOptions({ queryKey: limitsKey, queryFn: () => Display.Limits() });
+export const servicesKey = ['display', 'services'] as const;
+export const getServices = () => queryOptions({ queryKey: servicesKey, queryFn: () => Display.Services() });
+export function useSetServiceContent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ provider, enabled, showLimits, showTokens }: { provider: string; enabled: boolean; showLimits: boolean; showTokens: boolean }) => Display.SetServiceContent(provider, enabled, showLimits, showTokens),
+    onSuccess: (services) => { client.setQueryData(servicesKey, services); },
+  });
+}
 export function useSetShown() {
   const client = useQueryClient();
   return useMutation({

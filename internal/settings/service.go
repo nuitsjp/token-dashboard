@@ -36,7 +36,10 @@ type View struct {
 	DisplayID string    `json:"displayID"`
 	Displays  []Display `json:"displays"`
 	// LimitStyle is how Usage Limits are drawn: Gauges or Bars.
-	LimitStyle string `json:"limitStyle"`
+	LimitStyle              string `json:"limitStyle"`
+	Orientation             string `json:"orientation"`
+	RotationIntervalSeconds int    `json:"rotationIntervalSeconds"`
+	SkipFull5hServices      bool   `json:"skipFull5hServices"`
 }
 
 type SaveRequest struct {
@@ -46,7 +49,10 @@ type SaveRequest struct {
 	Token     string `json:"token"`
 	DisplayID string `json:"displayID"`
 	// An empty LimitStyle keeps the current one.
-	LimitStyle string `json:"limitStyle"`
+	LimitStyle              string  `json:"limitStyle"`
+	Orientation             *string `json:"orientation,omitempty"`
+	RotationIntervalSeconds *int    `json:"rotationIntervalSeconds,omitempty"`
+	SkipFull5hServices      *bool   `json:"skipFull5hServices,omitempty"`
 }
 
 // file is the on-disk format described in docs/design/data.md.
@@ -58,7 +64,18 @@ type file struct {
 	// LimitStyle is Gauges or Bars; absent means Gauges.
 	LimitStyle string `json:"limitStyle,omitempty"`
 	// HiddenLimits are the keys of the windows that are not drawn; absent means all are drawn.
-	HiddenLimits []string `json:"hiddenLimits,omitempty"`
+	HiddenLimits            []string                  `json:"hiddenLimits,omitempty"`
+	Orientation             string                    `json:"orientation"`
+	RotationIntervalSeconds int                       `json:"rotationIntervalSeconds"`
+	SkipFull5hServices      bool                      `json:"skipFull5hServices"`
+	CompactServiceContent   map[string]CompactContent `json:"compactServiceContent,omitempty"`
+}
+
+// CompactContent retains absent/null flags separately from explicit false.
+type CompactContent struct {
+	Enabled    *bool `json:"enabled"`
+	ShowLimits *bool `json:"showLimits"`
+	ShowTokens *bool `json:"showTokens"`
 }
 
 type connection struct {
@@ -76,10 +93,29 @@ type Service struct {
 	OnSaved func()
 	// OnStyleSaved tells the display that the style changed. It must not block.
 	OnStyleSaved func()
+	// OnDisplaySaved tells the display that its destination or rotation controls changed.
+	OnDisplaySaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
 	return &Service{path: path, entropy: []byte(appID), list: list, logger: logger}
+}
+
+// RotationSettings are the persisted compact display controls.
+type RotationSettings struct {
+	Orientation        string
+	IntervalSeconds    int
+	SkipFull5hServices bool
+}
+
+func (s *Service) view(saved file, conn connection, devices []turzx.Device) View {
+	v := viewOf(saved, conn, devices)
+	v.Orientation, v.RotationIntervalSeconds, v.SkipFull5hServices = saved.Orientation, saved.RotationIntervalSeconds, saved.SkipFull5hServices
+	return v
+}
+
+func rotationOf(saved file) RotationSettings {
+	return RotationSettings{saved.Orientation, saved.RotationIntervalSeconds, saved.SkipFull5hServices}
 }
 
 func (s *Service) Get() (view View, err error) {
@@ -94,7 +130,7 @@ func (s *Service) Get() (view View, err error) {
 	if err != nil {
 		return View{}, err
 	}
-	return viewOf(saved, conn, devices), nil
+	return s.view(saved, conn, devices), nil
 }
 
 // styleOf is the saved style: Bars when saved so, otherwise Gauges.
@@ -103,6 +139,15 @@ func styleOf(saved file) string {
 		return "Bars"
 	}
 	return "Gauges"
+}
+
+func validOrientation(value string) bool {
+	switch value {
+	case "Landscape", "ReverseLandscape", "Portrait", "ReversePortrait":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) Save(req SaveRequest) (view View, err error) {
@@ -119,6 +164,24 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 		return View{}, err
 	}
 	fields := map[string]string{}
+	rotation := rotationOf(saved)
+	if req.Orientation != nil {
+		if !validOrientation(*req.Orientation) {
+			fields["orientation"] = "Choose Landscape, Landscape (180°), Portrait, or Portrait (180°)."
+		} else {
+			rotation.Orientation = *req.Orientation
+		}
+	}
+	if req.RotationIntervalSeconds != nil {
+		if *req.RotationIntervalSeconds < 5 || *req.RotationIntervalSeconds > 300 {
+			fields["rotationIntervalSeconds"] = "Enter a whole number from 5 to 300."
+		} else {
+			rotation.IntervalSeconds = *req.RotationIntervalSeconds
+		}
+	}
+	if req.SkipFull5hServices != nil {
+		rotation.SkipFull5hServices = *req.SkipFull5hServices
+	}
 	if req.Source != "Local" && req.Source != "Hub" {
 		fields["source"] = "Choose Local or Hub."
 	}
@@ -142,7 +205,8 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits, CompactServiceContent: saved.CompactServiceContent}
+	next.Orientation, next.RotationIntervalSeconds, next.SkipFull5hServices = rotation.Orientation, rotation.IntervalSeconds, rotation.SkipFull5hServices
 	if req.LimitStyle != "" {
 		next.LimitStyle = req.LimitStyle
 	}
@@ -173,6 +237,7 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if err := s.write(next); err != nil {
 		return View{}, err
 	}
+	rotationChanged := rotation != rotationOf(saved)
 	s.logger.Info("settings_saved")
 	// The source is read again only when the source or the connection changed. A new display or style
 	// must not interrupt reading, which would blank the image until the next usage arrives.
@@ -182,21 +247,27 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if styleOf(next) != styleOf(saved) && s.OnStyleSaved != nil {
 		s.OnStyleSaved()
 	}
-	return viewOf(next, conn, devices), nil
+	if (next.DisplayID != saved.DisplayID || rotationChanged) && s.OnDisplaySaved != nil {
+		s.OnDisplaySaved()
+	}
+	return s.view(next, conn, devices), nil
 }
 
 func (s *Service) read() (file, connection, error) {
-	var saved file
+	saved := file{Source: "Local", Orientation: "Landscape", RotationIntervalSeconds: 10}
 	var conn connection
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return file{Source: "Local"}, conn, nil
+		return saved, conn, nil
 	}
 	if err != nil {
 		return saved, conn, err
 	}
 	unreadable := fault.New("SETTINGS_UNREADABLE", "The saved settings cannot be read. They may belong to another Windows user.")
 	if err := json.Unmarshal(data, &saved); err != nil {
+		return saved, conn, unreadable
+	}
+	if !validOrientation(saved.Orientation) || saved.RotationIntervalSeconds < 5 || saved.RotationIntervalSeconds > 300 {
 		return saved, conn, unreadable
 	}
 	if saved.Source == "" {
@@ -293,6 +364,32 @@ func HiddenLimits(s *Service) ([]string, error) {
 	defer s.mu.Unlock()
 	saved, _, err := s.read()
 	return saved.HiddenLimits, err
+}
+
+// CompactServices reads the persisted choices without exposing another Wails method.
+func CompactServices(s *Service) (map[string]CompactContent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	return saved.CompactServiceContent, err
+}
+
+// SetCompactService changes one service and preserves all other settings and IDs.
+func SetCompactService(s *Service, provider string, enabled, showLimits, showTokens bool) error {
+	if !showLimits && !showTokens {
+		return fault.Validation(map[string]string{"content": "Choose Both, Limits, or Tokens."})
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return err
+	}
+	if saved.CompactServiceContent == nil {
+		saved.CompactServiceContent = map[string]CompactContent{}
+	}
+	saved.CompactServiceContent[provider] = CompactContent{Enabled: &enabled, ShowLimits: &showLimits, ShowTokens: &showTokens}
+	return s.write(saved)
 }
 
 // SetLimitsShown shows or hides the windows with the given keys. The other saved values, including the

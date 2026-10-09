@@ -3,7 +3,7 @@ import * as Settings from '@bindings/token-monitor-turzx/internal/settings/servi
 import type { SaveRequest } from '@bindings/token-monitor-turzx/internal/settings/models';
 
 export const settingsKey = ['settings'] as const;
-export const getSettings = () => queryOptions({ queryKey: settingsKey, queryFn: () => Settings.Get() });
+export const getSettings = () => queryOptions({ queryKey: settingsKey, queryFn: () => Settings.Get(), refetchInterval: 1000 });
 export function useSaveSettings() {
   const client = useQueryClient();
   return useMutation({

@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { selectWideDisplay, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
@@ -79,6 +79,7 @@ async function count(page: Page, src: string, colour: number[] | null, rect = [0
 test('表示する枠を契約と枠で選ぶと、保存してプレビューを描き直し、再起動後も保つ', async ({ page, context }) => {
   test.setTimeout(240_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-limits-e2e-'));
+  selectWideDisplay(dataDir);
   const hub = await startHub();
   // The server redraws every second instead of every minute.
   let server = await startServer(dataDir, 34124, shortIntervals);
@@ -239,7 +240,7 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
       // The selection did not change the source, the connection, the display or the style.
       expect(file().source).toBe('Hub');
       expect(file().connection).toBeTruthy();
-      expect(file().displayID).toBe('');
+      expect(file().displayID).toBe('USB\\VID_1CBE&PID_0092\\633A6E01A48A0706');
       expect(file().limitStyle).toBe('Gauges');
       expect(hub.streams()).toBe(1);
       await expect(page.getByText(token)).toHaveCount(0);

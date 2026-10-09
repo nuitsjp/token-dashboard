@@ -1,0 +1,12 @@
+.root { container-type: inline-size; min-width: 0; }
+.control { padding: 0; }
+.content { padding: 12px 0 0; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.card { min-width: 0; padding: 12px; border: 1px solid var(--mantine-color-dark-4); border-radius: 10px; background: var(--mantine-color-dark-7); }
+.header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toggle { flex-shrink: 0; }
+.card[data-enabled='false'] .name { color: var(--mantine-color-dimmed); opacity: .55; }
+.card[data-enabled='false'] .contentChoice { opacity: .55; }
+@container (min-width: 660px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 300px) { .choice { padding-inline: 6px; } }

@@ -7,7 +7,7 @@ import { publicError } from '../../shared/errors';
 import { useDraftDirty } from '../../shared/ExitContext';
 
 type Scope = 'connection' | 'display';
-type DisplayChange = { display?: string; style?: string };
+type DisplayChange = { display?: string; style?: string; orientation?: string; interval?: number; skipFull?: boolean };
 export const automatic = '__automatic__';
 
 function useDraft(saved: View) {
@@ -42,6 +42,9 @@ function useDraft(saved: View) {
         source: saved.source || 'Local', url: saved.url, token: '',
         displayID: change.display === undefined ? saved.displayID : change.display === automatic ? '' : change.display,
         limitStyle: change.style ?? saved.limitStyle,
+        orientation: change.orientation,
+        rotationIntervalSeconds: change.interval,
+        skipFull5hServices: change.skipFull,
       });
     } catch { setFailed('display'); } finally { setPending({}); }
   }
@@ -49,9 +52,17 @@ function useDraft(saved: View) {
     saved, source, url, token, connectionDirty, done,
     display: pending.display ?? (saved.displayID || automatic),
     style: pending.style ?? (saved.limitStyle || 'Gauges'),
+    orientation: pending.orientation ?? saved.orientation,
+    interval: pending.interval ?? saved.rotationIntervalSeconds,
+    skipFull: pending.skipFull ?? saved.skipFull5hServices,
+    compact: /vid_1a86&pid_5722/i.test((pending.display ?? saved.displayID) === automatic || !(pending.display ?? saved.displayID)
+      ? saved.displays?.find(d => d.connected)?.deviceID ?? '' : pending.display ?? saved.displayID),
     setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken),
     setDisplay: (display: string) => void applyDisplay({ display }),
     setStyle: (style: string) => void applyDisplay({ style }),
+    setOrientation: (orientation: string) => void applyDisplay({ orientation }),
+    setInterval: (interval: number) => void applyDisplay({ interval }),
+    setSkipFull: (skipFull: boolean) => void applyDisplay({ skipFull }),
     saving: save.isPending,
     errorFor: (scope: Scope) => failed === scope ? save.error : null,
     fields: save.error ? publicError(save.error).fieldErrors ?? {} : {},

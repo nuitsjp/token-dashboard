@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"image"
 	"image/png"
 	"log/slog"
 	"sync"
@@ -22,12 +21,16 @@ type Service struct {
 	// State is where Limits reads the contracts from; SetShown asks it for a redraw.
 	State *usage.State
 	// Hidden returns the saved keys of the windows that are not drawn, and Show saves the change.
-	Hidden func() ([]string, error)
-	Show   func(keys []string, shown bool) error
-	Logger *slog.Logger
+	Hidden      func() ([]string, error)
+	Show        func(keys []string, shown bool) error
+	Content     func() (map[string]ServiceContent, error)
+	SaveContent func(provider string, enabled, showLimits, showTokens bool) error
+	Logger      *slog.Logger
+	Options     func() (Options, error)
 
-	mu      sync.Mutex
-	preview string
+	mu        sync.Mutex
+	preview   string
+	selection *serviceSelection
 }
 
 // hiddenSet is the saved hidden windows as a set.
@@ -73,9 +76,11 @@ func (s *Service) Preview() string {
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
 // until reset stays current. Each image goes to the preview in s and to output. It is a function,
 // not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(*image.RGBA), emit func(string, any), logger *slog.Logger) {
-	ticker := time.NewTicker(redraw)
-	defer ticker.Stop()
+func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(Frame), emit func(string, any), logger *slog.Logger) {
+	var cycle rotation
+	var last Options
+	var nextDraw time.Time
+	dirty := true
 	for {
 		stats, source := state.Snapshot()
 		// A selection that cannot be read draws every window, as style does for Gauges.
@@ -83,10 +88,62 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		if err != nil {
 			logger.Warn("hidden_limits_unavailable", "cause", err)
 		}
-		img := renderer.Render(withoutHidden(stats, hidden), time.Now(), source, style())
-		output(img)
+		now := time.Now()
+		options := Options{Style: style()}
+		if s.Options != nil {
+			options, err = s.Options()
+			if err != nil {
+				logger.Warn("display_options_unavailable", "cause", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-state.Changed():
+					dirty = true
+				case <-time.After(time.Second):
+				}
+				continue
+			}
+		}
+		// Detect reconnection without repeatedly redrawing or restarting page deadlines.
+		if !dirty && options == last && now.Before(nextDraw) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-state.Changed():
+				dirty = true
+			case <-time.After(min(time.Second, time.Until(nextDraw))):
+			}
+			continue
+		}
+		visible := withoutHidden(stats, hidden)
+		var frame Frame
+		wait := redraw
+		renderOptions := options
+		renderOptions.source = source
+		// Automatic can temporarily have no connected device. Continue the compact
+		// cycle so reconnecting it resumes the current page, not the first page.
+		if options.DeviceID == "" && cycle.options.Compact {
+			renderOptions.Compact = true
+			renderOptions.DeviceID = cycle.options.DeviceID
+		}
+		if renderOptions.Compact {
+			pages, message := compactPages(visible, renderOptions)
+			cycle.update(pages, renderOptions, now)
+			var page *compactPage
+			if len(pages) > 0 {
+				page = &pages[cycle.index]
+				wait = min(wait, time.Until(cycle.deadline))
+			}
+			frame.Image = renderer.renderCompact(visible, source, renderOptions, page, cycle.index+1, len(pages), message, now)
+		} else {
+			cycle = rotation{}
+			frame.Image = renderer.Render(visible, now, source, options.Style)
+		}
+		frame.Target = options
+		frame.Target.Compact = renderOptions.Compact
+		output(frame)
 		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
+		if err := png.Encode(&buf, frame.Image); err != nil {
 			logger.Error("preview_encode_failed", "cause", err)
 		} else {
 			s.mu.Lock()
@@ -94,11 +151,16 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 			s.mu.Unlock()
 			emit(Updated, nil)
 		}
+		last, nextDraw, dirty = options, now.Add(wait), false
+		timer := time.NewTimer(max(time.Millisecond, min(time.Second, wait)))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
 		case <-state.Changed():
-		case <-ticker.C:
+			dirty = true
+		case <-timer.C:
 		}
+		timer.Stop()
 	}
 }

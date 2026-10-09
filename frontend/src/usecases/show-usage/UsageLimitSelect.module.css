@@ -1,4 +1,4 @@
-.panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.panel { display: flex; flex-direction: column; flex: 1; min-height: 180px; }
 .scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .card { background: var(--mantine-color-dark-7); border: 1px solid var(--mantine-color-dark-4); border-radius: 10px; padding: 12px; transition: opacity .15s; }
@@ -20,3 +20,7 @@
 .fill { display: block; height: 100%; background: #7466e0; }
 .fill[data-level='warn'] { background: #fab219; }
 .fill[data-level='bad'] { background: #f0616d; }
+.panel[data-compact] { container-name: compact-limits; container-type: inline-size; flex: none; min-height: auto; }
+.panel[data-compact] .grid { grid-template-columns: minmax(0, 1fr); }
+.panel[data-compact] .title { overflow-wrap: anywhere; }
+@container compact-limits (min-width: 660px) { .panel[data-compact] .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

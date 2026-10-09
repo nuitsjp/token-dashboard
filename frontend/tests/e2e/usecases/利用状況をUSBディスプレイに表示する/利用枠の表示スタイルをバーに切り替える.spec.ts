@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { selectWideDisplay, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
@@ -117,6 +117,7 @@ async function extents(page: Page, src: string) {
 test('Display style を Bars に切り替えると、保存して Tokens の列と横棒の利用枠で描き直す', async ({ page, context }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-bars-e2e-'));
+  selectWideDisplay(dataDir);
   const hub = await startHub();
   // The server redraws every second instead of every minute.
   let server = await startServer(dataDir, 34123, shortIntervals);
@@ -141,9 +142,15 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
     let requests = 0;
     await test.step('手順1', async () => {
       // Output sits at the right end of the row of the page heading, above the Style card.
-      const title = await page.getByRole('heading', { name: 'Display settings' }).boundingBox();
-      const style1 = await page.getByRole('heading', { name: 'Style' }).boundingBox();
-      const output1 = await page.getByRole('heading', { name: 'Output' }).boundingBox();
+      // Measure one layout snapshot: the asynchronous update notice can move the whole page
+      // between separate browser calls without changing the headings' relative placement.
+      const headings = await page.getByRole('heading').evaluateAll(elements => Object.fromEntries(elements.map(element => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return [element.textContent, { x, y, width, height }];
+      })));
+      const title = headings['Display settings'];
+      const style1 = headings.Style;
+      const output1 = headings.Output;
       expect(Math.abs(output1!.y - title!.y)).toBeLessThan(title!.height);
       expect(output1!.x).toBeGreaterThan(title!.x + title!.width);
       expect(output1!.y).toBeLessThan(style1!.y);
