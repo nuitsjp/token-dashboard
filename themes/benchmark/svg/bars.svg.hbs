@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="{{width}}" height="{{height}}" viewBox="0 0 {{width}} {{height}}" font-family="Yu Gothic" font-weight="500" fill="{{colors.text}}">
+  <rect width="{{width}}" height="{{height}}" fill="{{colors.background}}" />
+  {{#if available}}
+    <defs>
+      <clipPath id="bars-heading-clip">
+        <rect width="{{layout.bars.columnWidth}}" height="{{layout.bars.headerHeight}}" />
+      </clipPath>
+    </defs>
+    {{#each tokens}}
+      <text x="{{@root.layout.bars.tokensLeft}}" y="{{barLabelY}}" font-size="20" fill="{{@root.colors.dim}}">{{label}}</text>
+      <text x="{{@root.layout.bars.tokensRight}}" y="{{barLabelY}}" font-size="22" text-anchor="end" fill="{{@root.colors.accent}}">{{costText}}</text>
+      <text x="{{@root.layout.bars.tokensRight}}" y="{{barValueY}}" font-size="{{tokensFontSize}}" font-weight="700" text-anchor="end">{{tokensText}}</text>
+    {{/each}}
+    <rect x="{{layout.bars.dividerX}}" y="{{layout.bars.dividerY}}" width="2" height="{{layout.bars.dividerHeight}}" fill="{{colors.divider}}" />
+    {{#each barColumns}}
+      <g transform="translate({{x}} {{y}})">
+        {{#each contracts}}
+          <g transform="translate(0 {{y}})">
+            <g clip-path="url(#bars-heading-clip)">
+              <text x="0" y="{{@root.layout.bars.headingBaseline}}" font-size="36" font-weight="700">{{provider}}<tspan dx="14" font-size="24" font-weight="500" fill="{{@root.colors.dim}}">{{plan}}</tspan></text>
+            </g>
+            {{#each windows}}
+              <g transform="translate(0 {{y}})" data-window-id="{{id}}">
+                <text x="0" y="{{@root.layout.bars.rowBaseline}}" font-size="21">{{label}}</text>
+                <text x="{{@root.layout.bars.resetRight}}" y="{{@root.layout.bars.rowBaseline}}" font-size="19" text-anchor="end" fill="{{@root.colors.dim}}">{{barResetText}}</text>
+                <text x="{{@root.layout.bars.percentRight}}" y="{{@root.layout.bars.rowBaseline}}" font-size="28" font-weight="700" text-anchor="end">{{#if hasRemaining}}{{percentText}}{{else}}—{{/if}}</text>
+                <rect x="0" y="{{@root.layout.bars.barY}}" width="{{@root.layout.bars.columnWidth}}" height="{{@root.layout.bars.barHeight}}" fill="{{@root.colors.divider}}" />
+                {{#if hasRemaining}}
+                  <rect x="0" y="{{@root.layout.bars.barY}}" width="{{fillWidth}}" height="{{@root.layout.bars.barHeight}}" fill="{{fillColor}}" data-meter-fill="true" />
+                {{/if}}
+              </g>
+            {{/each}}
+          </g>
+        {{/each}}
+      </g>
+    {{/each}}
+  {{else}}
+    <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-size="64" fill="{{colors.dim}}">{{waitingMessage}}</text>
+  {{/if}}
+</svg>

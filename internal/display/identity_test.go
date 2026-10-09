@@ -3,8 +3,8 @@ package display
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"image"
 	"io"
 	"log/slog"
 	"reflect"
@@ -91,21 +91,28 @@ func TestWideRunIgnoresCompactAliasesAndServiceChoices(t *testing.T) {
 			{Provider: "codex", Windows: []usage.Window{compactWindow("weekly", percent(50))}},
 		}}}
 	for _, style := range []Style{Gauges, Bars} {
-		var reference *image.RGBA
+		var reference *ThemeData
 		for _, source := range []string{"Hub", "Local"} {
-			r := testCompactRenderer(t)
 			state := usage.NewState()
 			state.SetSource(source)
 			state.Set(stats)
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			options := Options{Style: style, ServiceContent: &serviceSelection{content: map[string]ServiceContent{"Codex": {}, "codex": {}}}}
 			s := &Service{State: state, Hidden: func() ([]string, error) { return nil, nil }, Options: func() (Options, error) { return options, nil }}
+			canvasResult := canvasFrame(t)
+			var request *FrameRequest
+			r := NewCanvasRenderer(s, func(string, any) {
+				request = s.RenderRequest()
+				if err := s.CompleteFrame(request.ID, base64.StdEncoding.EncodeToString(canvasResult.PNG), base64.StdEncoding.EncodeToString(canvasResult.JPEG), ""); err != nil {
+					t.Error(err)
+				}
+			})
 			ctx, cancel := context.WithCancel(context.Background())
 			frames := make(chan Frame, 2)
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				Run(ctx, s, r, state, time.Minute, func() Style { return style }, func(f Frame) { frames <- f }, func(string, any) {}, logger)
+				Run(ctx, s, r, nil, state, time.Minute, func() Style { return style }, func(f Frame) { frames <- f }, func(string, any) {}, logger)
 			}()
 			var frame Frame
 			select {
@@ -117,13 +124,18 @@ func TestWideRunIgnoresCompactAliasesAndServiceChoices(t *testing.T) {
 			}
 			cancel()
 			<-done
-			if frame.Target.Compact || frame.Image.Bounds() != image.Rect(0, 0, Width, Height) || !reflect.DeepEqual(frame.Target, options) {
+			if frame.Target.Compact || !bytes.Equal(frame.PNG, canvasResult.PNG) || !bytes.Equal(frame.JPEG, canvasResult.JPEG) || !reflect.DeepEqual(frame.Target, options) {
 				t.Fatal("compact settings changed the wide frame destination")
 			}
-			if reference != nil && !bytes.Equal(reference.Pix, frame.Image.Pix) {
-				t.Fatal("Local aliases or compact OFF choices changed the 9.2-inch image")
+			if !reflect.DeepEqual(request.Data, themeData(stats, time.Unix(0, 0), source)) {
+				t.Fatal("compact choices changed the wide display data")
 			}
-			reference = frame.Image
+			data := request.Data
+			data.WaitingMessage = ""
+			if reference != nil && !reflect.DeepEqual(*reference, data) {
+				t.Fatal("Local aliases or compact OFF choices changed the 9.2-inch data")
+			}
+			reference = &data
 		}
 	}
 }

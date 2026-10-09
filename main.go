@@ -122,7 +122,7 @@ func run() error {
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
-	renderer, err := display.NewRenderer()
+	compactRenderer, err := display.NewRenderer()
 	if err != nil {
 		return err
 	}
@@ -156,6 +156,7 @@ func run() error {
 		}
 		return display.Options{DeviceID: id, DeviceConnected: connected, Compact: turzx.IsCompact(id), Orientation: view.Orientation, Interval: time.Duration(view.RotationIntervalSeconds) * time.Second, SkipFull5hServices: view.SkipFull5hServices, Style: display.ParseStyle(view.LimitStyle), ServiceContent: selection}, nil
 	}
+	renderer := display.NewCanvasRenderer(displayService, emit)
 	output := display.NewOutput(displayService.Options, usageState.Touch, logger)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -197,7 +198,7 @@ func run() error {
 	}
 	settingsService.OnStyleSaved = usageState.Touch
 	settingsService.OnDisplaySaved = usageState.Touch
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	go display.Run(ctx, displayService, renderer, compactRenderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {

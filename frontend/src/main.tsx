@@ -6,7 +6,9 @@ import { RouterProvider } from '@tanstack/react-router';
 import '@mantine/core/styles.css';
 import { queryClient, router } from './app/router';
 import { reportFrontendError } from './features/application/queries';
+import { startThemeRenderer } from './features/display/theme-renderer';
 import './style.css';
+void startThemeRenderer().catch(reportFrontendError);
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element is missing');
 // Dark palette shared with multi-token-monitor: 7 is the page, 6 the card surface.

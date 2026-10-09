@@ -221,12 +221,20 @@ func TestDisplayRunReconnectsWithCurrentPageAndMatchingPreview(t *testing.T) {
 		preview string
 	}
 	frames := make(chan result, 32)
+	canvasResult := canvasFrame(t)
+	var wideRequest *FrameRequest
+	canvas := NewCanvasRenderer(s, func(string, any) {
+		wideRequest = s.RenderRequest()
+		if err := s.CompleteFrame(wideRequest.ID, base64.StdEncoding.EncodeToString(canvasResult.PNG), base64.StdEncoding.EncodeToString(canvasResult.JPEG), ""); err != nil {
+			t.Error(err)
+		}
+	})
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		var latest Frame
-		Run(ctx, s, r, state, time.Minute, func() Style { return Bars }, func(f Frame) { latest = f }, func(string, any) { frames <- result{latest, s.Preview()} }, logger)
+		Run(ctx, s, canvas, r, state, time.Minute, func() Style { return Bars }, func(f Frame) { latest = f }, func(string, any) { frames <- result{latest, s.Preview()} }, logger)
 	}()
 	defer func() { stop(); <-done }()
 	deadline := time.Now().Add(3 * time.Second)
@@ -307,12 +315,11 @@ func TestDisplayRunReconnectsWithCurrentPageAndMatchingPreview(t *testing.T) {
 	for wide.frame.Target.Compact {
 		wide = get()
 	}
-	if wide.frame.Target.Compact || wide.frame.Image.Bounds().Dx() != Width || wide.frame.Image.Bounds().Dy() != Height {
-		t.Fatal("compact orientation affected the wide image")
+	if wide.frame.Target.Compact || !bytes.Equal(wide.frame.PNG, canvasResult.PNG) || !bytes.Equal(wide.frame.JPEG, canvasResult.JPEG) {
+		t.Fatal("compact orientation affected the wide Canvas result")
 	}
-	baseline := r.Render(updated, time.Unix(0, 0), "Local", Bars)
-	if !bytes.Equal(wide.frame.Image.Pix, baseline.Pix) {
-		t.Fatal("compact content/skip settings affected the wide image")
+	if wideRequest.Theme != "bars" || !reflect.DeepEqual(wideRequest.Data, themeData(updated, time.Unix(0, 0), "Local")) {
+		t.Fatal("compact content/skip settings affected the wide display data")
 	}
 }
 

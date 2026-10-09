@@ -16,7 +16,7 @@ import (
 // Updated is emitted after a new image is available from Preview.
 const Updated = "display:updated"
 
-// Service hands the latest image to the window. The window never draws it.
+// Service coordinates rendering and publishes the latest PNG to the preview.
 type Service struct {
 	// State is where Limits reads the contracts from; SetShown asks it for a redraw.
 	State *usage.State
@@ -31,6 +31,8 @@ type Service struct {
 	mu        sync.Mutex
 	preview   string
 	selection *serviceSelection
+	nextFrame uint64
+	pending   *pendingFrame
 }
 
 // hiddenSet is the saved hidden windows as a set.
@@ -76,7 +78,7 @@ func (s *Service) Preview() string {
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
 // until reset stays current. Each image goes to the preview in s and to output. It is a function,
 // not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(Frame), emit func(string, any), logger *slog.Logger) {
+func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, compactRenderer *Renderer, state *usage.State, redraw time.Duration, style func() Style, output func(Frame), emit func(string, any), logger *slog.Logger) {
 	var cycle rotation
 	var last Options
 	var nextDraw time.Time
@@ -117,6 +119,7 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 		}
 		visible := withoutHidden(stats, hidden)
 		var frame Frame
+		var renderErr error
 		wait := redraw
 		renderOptions := options
 		renderOptions.source = source
@@ -134,20 +137,25 @@ func Run(ctx context.Context, s *Service, renderer *Renderer, state *usage.State
 				page = &pages[cycle.index]
 				wait = min(wait, time.Until(cycle.deadline))
 			}
-			frame.Image = renderer.renderCompact(visible, source, renderOptions, page, cycle.index+1, len(pages), message, now)
+			frame.Image = compactRenderer.renderCompact(visible, source, renderOptions, page, cycle.index+1, len(pages), message, now)
+			var buf bytes.Buffer
+			renderErr = png.Encode(&buf, frame.Image)
+			frame.PNG = buf.Bytes()
 		} else {
 			cycle = rotation{}
-			frame.Image = renderer.Render(visible, now, source, options.Style)
+			frame, renderErr = renderer.Render(ctx, visible, now, source, options.Style)
+			if ctx.Err() != nil {
+				return
+			}
 		}
 		frame.Target = options
 		frame.Target.Compact = renderOptions.Compact
-		output(frame)
-		var buf bytes.Buffer
-		if err := png.Encode(&buf, frame.Image); err != nil {
-			logger.Error("preview_encode_failed", "cause", err)
+		if renderErr != nil {
+			logger.Error("display_render_failed", "cause", renderErr)
 		} else {
+			output(frame)
 			s.mu.Lock()
-			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(frame.PNG)
 			s.mu.Unlock()
 			emit(Updated, nil)
 		}

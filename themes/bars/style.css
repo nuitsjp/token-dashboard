@@ -1,0 +1,203 @@
+body {
+  margin: 0;
+}
+
+.bars-theme,
+.bars-theme * {
+  box-sizing: border-box;
+}
+
+.bars-theme {
+  position: relative;
+  width: 1920px;
+  height: 462px;
+  overflow: hidden;
+  background: #0f1117;
+  color: #e8eaf0;
+  font-family: "Yu Gothic";
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* With Yu Gothic and line-height: 1, this aligns a text box to its baseline. */
+.baseline-text {
+  transform: translateY(-0.8413em);
+}
+
+.tokens {
+  position: absolute;
+  top: 30px;
+  left: 40px;
+  width: 290px;
+}
+
+.token-period {
+  position: relative;
+  height: 140px;
+}
+
+.token-label,
+.token-cost,
+.token-value {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.token-label {
+  top: 28px;
+  left: 0;
+  color: #8a90a0;
+  font-size: 20px;
+}
+
+.token-cost {
+  top: 28px;
+  right: 0;
+  color: #7cc4ff;
+  font-size: 22px;
+}
+
+.token-value {
+  top: calc(36px + var(--token-font-size));
+  right: 0;
+  font-size: var(--token-font-size);
+  font-weight: 700;
+}
+
+.divider {
+  position: absolute;
+  top: 30px;
+  left: 356px;
+  width: 2px;
+  height: 402px;
+  background: #2a2f3a;
+}
+
+.limits {
+  position: absolute;
+  top: 26px;
+  left: 384px;
+  display: grid;
+  grid-template-columns: repeat(4, 353px);
+  column-gap: 28px;
+}
+
+.limit-column {
+  min-width: 0;
+}
+
+.contract + .contract {
+  margin-top: 18px;
+}
+
+.contract-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  height: 54px;
+  padding-top: 33px;
+  overflow: hidden;
+}
+
+.provider,
+.plan,
+.window-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider {
+  flex-shrink: 0;
+  max-width: 100%;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.plan {
+  min-width: 0;
+  color: #8a90a0;
+  font-size: 24px;
+}
+
+.window {
+  position: relative;
+  height: 72px;
+}
+
+.window-line {
+  position: absolute;
+  top: 25px;
+  right: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+}
+
+.window-label {
+  min-width: 0;
+  font-size: 21px;
+}
+
+.window-reset {
+  margin-right: 14px;
+  margin-left: 10px;
+  color: #8a90a0;
+  font-size: 19px;
+  white-space: nowrap;
+}
+
+.window-percent {
+  position: relative;
+  font-size: 28px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.percent-reserve {
+  visibility: hidden;
+}
+
+.percent-value {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.bar {
+  position: absolute;
+  top: 37px;
+  left: 0;
+  display: block;
+  width: 353px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.bar-track {
+  fill: #2a2f3a;
+}
+
+.tone-normal {
+  fill: #7466e0;
+}
+
+.tone-warning {
+  fill: #fab219;
+}
+
+.tone-danger {
+  fill: #f0616d;
+}
+
+.waiting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a90a0;
+  font-size: 64px;
+  white-space: nowrap;
+}

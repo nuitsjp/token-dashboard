@@ -1,19 +1,20 @@
 package display
 
 import (
-	"bytes"
 	"context"
 	"image"
-	"image/jpeg"
 	"log/slog"
 	"time"
 
 	"token-monitor-turzx/internal/turzx"
 )
 
-// Frame keeps the image's destination and rendering settings together.
+// Frame keeps the render result and its destination together.
+// Compact frames carry Image and PNG; Canvas frames carry PNG and encoded JPEG.
 type Frame struct {
 	Image  *image.RGBA
+	PNG    []byte
+	JPEG   []byte
 	Target Options
 }
 
@@ -104,16 +105,9 @@ func (o *Output) Run(ctx context.Context) {
 			o.refresh()
 			continue
 		}
-		var data []byte
+		data := frame.JPEG
 		if options.Compact {
 			data = turzx.RGB565(frame.Image)
-		} else {
-			var buf bytes.Buffer
-			if err := jpeg.Encode(&buf, rotateClockwise(frame.Image), &jpeg.Options{Quality: 85}); err != nil {
-				fail("turzx_encode_failed", err)
-				continue
-			}
-			data = buf.Bytes()
 		}
 		current, err := o.target()
 		if err != nil {
@@ -136,7 +130,11 @@ func (o *Output) Run(ctx context.Context) {
 		}
 		lastFailure = ""
 		if sentOrientation != options.Orientation {
-			o.logger.Info("turzx_frame_sent", "compact", options.Compact, "orientation", options.Orientation, "width", frame.Image.Bounds().Dx(), "height", frame.Image.Bounds().Dy())
+			width, height := Width, Height
+			if options.Compact {
+				width, height = frame.Image.Bounds().Dx(), frame.Image.Bounds().Dy()
+			}
+			o.logger.Info("turzx_frame_sent", "compact", options.Compact, "orientation", options.Orientation, "width", width, "height", height)
 			sentOrientation = options.Orientation
 		}
 	}

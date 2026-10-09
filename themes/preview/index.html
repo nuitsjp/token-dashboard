@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Token Dashboard テーマプレビュー</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0b0d12;
+        color: #e8eaf0;
+        font-family: "Yu Gothic";
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+      p {
+        color: #8a90a0;
+        margin: 0 0 24px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      select {
+        padding: 8px;
+        background: #151821;
+        color: #e8eaf0;
+        border: 1px solid #2a2f3a;
+        border-radius: 6px;
+        font: inherit;
+      }
+      input[type="range"] {
+        width: 240px;
+        accent-color: #7466e0;
+      }
+      output {
+        width: 48px;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .preview {
+        width: 100%;
+        aspect-ratio: 1920 / 462;
+        overflow: hidden;
+        border: 1px solid #2a2f3a;
+        border-radius: 8px;
+        margin-bottom: 24px;
+      }
+      iframe {
+        width: 1920px;
+        height: 462px;
+        border: 0;
+        transform-origin: top left;
+        display: block;
+      }
+      .error {
+        color: #f0616d;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>テーマプレビュー</h1>
+    <p>現在の2つのスタイルを同じサンプルデータで表示しています。</p>
+    <div class="controls">
+      <label
+        >更新する利用枠
+        <select id="window"></select
+      ></label>
+      <label
+        >残量
+        <input
+          id="remaining"
+          type="range"
+          min="0"
+          max="100"
+          value="72"
+        /><output id="value">72%</output></label
+      >
+      <label
+        >表示状態
+        <select id="state">
+          <option value="ready">取得済み</option>
+          <option value="unknown">選択した枠の残量が不明</option>
+          <option value="waiting">取得待ち</option>
+        </select></label
+      >
+    </div>
+    <div id="previews"></div>
+    <p id="error" class="error" role="alert"></p>
+    <script type="module" src="/preview/preview.js"></script>
+  </body>
+</html>
