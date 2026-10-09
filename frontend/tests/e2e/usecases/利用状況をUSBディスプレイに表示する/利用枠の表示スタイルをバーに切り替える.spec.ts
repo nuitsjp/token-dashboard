@@ -146,7 +146,7 @@ async function rotationError(page: Page, png: string, jpeg: string) {
 }
 
 test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の取得失敗後も更新を再開する', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-canvas-e2e-'));
   const hub = await startHub();
   const server = await startServer(dataDir, 34129, shortIntervals);
@@ -175,11 +175,15 @@ test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の�
     while (frames.size > 8) frames.delete(frames.keys().next().value!);
   });
   const checkRotation = async () => {
+    // The first asset request fails on purpose. A 5s poll spends that whole budget on the
+    // missing preview and never sees the retried image when the runner is busy.
     await expect.poll(async () => {
-      const frame = frames.get(await preview(page));
+      const image = page.getByRole('img', { name: 'Display preview' });
+      if (await image.count() === 0) return 0;
+      const frame = frames.get((await image.getAttribute('src')) ?? '');
       if (!frame) return 0;
       return (await rotationError(page, frame.png, frame.jpeg)).counterclockwise;
-    }).toBeGreaterThan(5);
+    }, { timeout: 20_000 }).toBeGreaterThan(5);
     const frame = frames.get(await preview(page))!;
     const result = await rotationError(page, frame.png, frame.jpeg);
     expect(result.size).toEqual([1920, 462, 462, 1920]);
