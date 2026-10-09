@@ -1,13 +1,78 @@
 package localusage
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"token-monitor-turzx/internal/usage"
 )
+
+func TestClientPeriodsKeepToolsAndMissingValuesSeparate(t *testing.T) {
+	const input = `{"summary":{"clients":["summary-only"]},"contributions":[
+ {"date":"2026-09-30","totals":{"cost":30},"tokenBreakdown":{"input":3000},"clients":[{"client":"claude","tokens":{"input":30},"cost":3},{"client":"partial","tokens":{"input":9},"cost":0.5}]},
+ {"date":"2026-10-01","totals":{"cost":20},"tokenBreakdown":{"input":2000},"clients":[{"client":"claude","tokens":{"input":20},"cost":2},{"client":"partial","tokens":null,"cost":null}]},
+ {"date":"2026-10-07","totals":{"cost":10},"tokenBreakdown":{"input":1000},"clients":[
+  {"client":"claude","tokens":{"input":1,"output":2,"cacheRead":3,"cacheWrite":4,"reasoning":999},"cost":1},
+  {"client":"codex","tokens":{"input":100},"cost":4},
+  {"client":"zero","tokens":{},"cost":0},
+  {"client":"tokens-only","tokens":{}}, {"client":"cost-only","cost":0},
+  {"client":"unknown"}
+ ]}
+]}`
+	var raw graph
+	if err := json.Unmarshal([]byte(input), &raw); err != nil {
+		t.Fatal(err)
+	}
+	got := convertGraph(raw, time.Date(2026, 10, 7, 12, 0, 0, 0, time.Local))
+	for _, tc := range []struct {
+		name    string
+		period  usage.Period
+		total   int64
+		cost    float64
+		clients map[string]int64
+		costs   map[string]float64
+	}{
+		{"today", got.Today, 1000, 10, map[string]int64{"claude": 10, "codex": 100, "zero": 0, "tokens-only": 0, "partial": 0}, map[string]float64{"claude": 1, "codex": 4, "zero": 0, "cost-only": 0, "partial": 0}},
+		{"month", got.Month, 3000, 30, map[string]int64{"claude": 30, "codex": 100, "zero": 0, "tokens-only": 0}, map[string]float64{"claude": 3, "codex": 4, "zero": 0, "cost-only": 0}},
+		{"all", got.AllTime, 6000, 60, map[string]int64{"claude": 60, "codex": 100, "zero": 0, "tokens-only": 0}, map[string]float64{"claude": 6, "codex": 4, "zero": 0, "cost-only": 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.period.TotalTokens != tc.total || tc.period.CostUSD != tc.cost || tc.period.ClientBreakdown == nil || !reflect.DeepEqual(tc.period.Clients, tc.clients) || !reflect.DeepEqual(tc.period.ClientCosts, tc.costs) {
+				t.Fatalf("period %+v, attribution %+v; want %v / %v", tc.period, tc.period.ClientBreakdown, tc.clients, tc.costs)
+			}
+		})
+	}
+}
+
+func TestClientAttributionNeedsOnlyOneGraphCommand(t *testing.T) {
+	f := newFakeTokscale(t)
+	f.write("graph.json", `{"summary":{"clients":["claude","codex"]},"contributions":[{"date":"2026-10-07","clients":[{"client":"claude","tokens":{"input":12},"cost":1},{"client":"codex","tokens":{"output":34},"cost":2}]}]}`)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(executable, filepath.Join(f.dir, "config"), f.scanFile(), testIntervals, usage.NewState(), nil)
+	periods, clients, err := r.readPeriods(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if periods.AllTime.Clients["claude"] != 12 || periods.AllTime.Clients["codex"] != 34 || !reflect.DeepEqual(clients, []string{"claude", "codex"}) {
+		t.Fatal("lost graph attribution")
+	}
+	log, err := os.ReadFile(filepath.Join(f.dir, "calls.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.runs("graph --no-spinner")) != 1 || bytes.Count(log, []byte("start|")) != 1 {
+		t.Fatalf("extra command executions: %s", log)
+	}
+}
 
 func TestConvertTokscalePeriods(t *testing.T) {
 	const input = `{"contributions": [

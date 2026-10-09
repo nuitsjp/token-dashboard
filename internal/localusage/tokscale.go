@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -12,17 +13,30 @@ import (
 	"token-monitor-turzx/internal/usage"
 )
 
+type tokenBreakdown struct {
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	CacheRead  int64 `json:"cacheRead"`
+	CacheWrite int64 `json:"cacheWrite"`
+}
+
+func (b tokenBreakdown) total() int64 {
+	return b.Input + b.Output + b.CacheRead + b.CacheWrite
+}
+
+type clientContribution struct {
+	Client string          `json:"client"`
+	Tokens *tokenBreakdown `json:"tokens"`
+	Cost   *float64        `json:"cost"`
+}
+
 type contribution struct {
 	Date   string `json:"date"`
 	Totals struct {
 		Cost float64 `json:"cost"`
 	} `json:"totals"`
-	TokenBreakdown struct {
-		Input      int64 `json:"input"`
-		Output     int64 `json:"output"`
-		CacheRead  int64 `json:"cacheRead"`
-		CacheWrite int64 `json:"cacheWrite"`
-	} `json:"tokenBreakdown"`
+	TokenBreakdown tokenBreakdown       `json:"tokenBreakdown"`
+	Clients        []clientContribution `json:"clients"`
 }
 
 type graph struct {
@@ -93,15 +107,70 @@ func convertGraph(g graph, now time.Time) usage.Periods {
 	today := now.Format("2006-01-02")
 	month := today[:len("2006-01-")]
 	var periods usage.Periods
+	// Known client values start at zero for periods with no usage. An entirely
+	// unreported value stays absent, and a missing addend invalidates that sum.
+	known := &usage.ClientBreakdown{Clients: map[string]int64{}, ClientCosts: map[string]float64{}}
+	for _, c := range g.Contributions {
+		for _, client := range c.Clients {
+			if client.Client == "" {
+				continue
+			}
+			if client.Tokens != nil {
+				known.Clients[client.Client] = 0
+			}
+			if client.Cost != nil {
+				known.ClientCosts[client.Client] = 0
+			}
+		}
+	}
+	missing := map[*usage.Period]*usage.ClientBreakdown{}
+	if len(known.Clients)+len(known.ClientCosts) > 0 {
+		for _, period := range []*usage.Period{&periods.Today, &periods.Month, &periods.AllTime} {
+			period.ClientBreakdown = &usage.ClientBreakdown{Clients: maps.Clone(known.Clients), ClientCosts: maps.Clone(known.ClientCosts)}
+			missing[period] = &usage.ClientBreakdown{Clients: map[string]int64{}, ClientCosts: map[string]float64{}}
+		}
+	}
 	for _, c := range g.Contributions {
 		b := c.TokenBreakdown
-		day := usage.Period{TotalTokens: b.Input + b.Output + b.CacheRead + b.CacheWrite, CostUSD: c.Totals.Cost}
+		day := usage.Period{TotalTokens: b.total(), CostUSD: c.Totals.Cost}
 		add(&periods.AllTime, day)
+		targets := []*usage.Period{&periods.AllTime}
 		if strings.HasPrefix(c.Date, month) {
 			add(&periods.Month, day)
+			targets = append(targets, &periods.Month)
 		}
 		if c.Date == today {
 			add(&periods.Today, day)
+			targets = append(targets, &periods.Today)
+		}
+		for _, period := range targets {
+			if period.ClientBreakdown == nil {
+				continue
+			}
+			for _, client := range c.Clients {
+				id := client.Client
+				if id == "" {
+					continue
+				}
+				if client.Tokens != nil {
+					period.Clients[id] += client.Tokens.total()
+				} else {
+					missing[period].Clients[id] = 0
+				}
+				if client.Cost != nil {
+					period.ClientCosts[id] += *client.Cost
+				} else {
+					missing[period].ClientCosts[id] = 0
+				}
+			}
+		}
+	}
+	for period, unknown := range missing {
+		for id := range unknown.Clients {
+			delete(period.Clients, id)
+		}
+		for id := range unknown.ClientCosts {
+			delete(period.ClientCosts, id)
 		}
 	}
 	return periods
