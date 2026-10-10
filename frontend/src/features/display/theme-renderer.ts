@@ -25,6 +25,12 @@ const themes = new Map(Object.entries(manifests).map(([path, manifest]) => {
   return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet, shrinkTokens: manifest.id === 'bars' }] as [string, LoadedTheme];
 }));
 
+export function shareTheme(id: string, sourceId: string) {
+  const source = themes.get(sourceId);
+  if (!source) throw new Error(`Unknown display theme: ${sourceId}`);
+  themes.set(id, { ...source });
+}
+
 let gate = Promise.resolve();
 function enqueue<T>(work: () => Promise<T>): Promise<T> {
   const result = gate.then(work, work);

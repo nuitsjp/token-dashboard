@@ -1,3 +1,5 @@
+import { shareTheme } from '../display/theme-renderer';
+
 export type StyleDefinition = { id: string; name: string };
 
 type Manifest = { id?: string; name?: string };
@@ -19,7 +21,29 @@ function definitions(value: unknown): StyleDefinition[] {
   return list;
 }
 
-// Themes compiled into the app. Built-in cards are added by the list, so removing a built-in here does not drop it.
+const imported: StyleDefinition[] = [];
+
+function compiledStyles(): StyleDefinition[] {
+  return definitions(Object.values(manifests));
+}
+
+// Themes compiled into the app, plus styles imported in this session.
+// Built-in cards are added by the list, so removing a built-in here does not drop it.
 export function loadStyleCatalog(): Promise<StyleDefinition[]> {
-  return Promise.resolve(definitions(Object.values(manifests)));
+  const compiled = compiledStyles();
+  const seen = new Set(compiled.map(style => style.id));
+  return Promise.resolve([...compiled, ...imported.filter(style => !seen.has(style.id))]);
+}
+
+// dev:mock replaces folder inspection and copying with the fixed definition.
+export async function importStyleFolder(): Promise<void> {
+  if (typeof __STYLE_ADD_MOCK__ === 'undefined' || !__STYLE_ADD_MOCK__) throw new Error('Style import is unavailable');
+  const response = await fetch('/mock/added-style.json');
+  if (!response.ok) throw new Error('Style catalog is unavailable');
+  const [style] = definitions([await response.json()]);
+  if (!style) throw new Error('Style catalog is unavailable');
+  const current = [...compiledStyles(), ...imported];
+  if (current.some(item => item.id === style.id)) throw { code: 'DUPLICATE', message: 'This style id is already defined.' };
+  shareTheme(style.id, 'bars');
+  imported.push(style);
 }
