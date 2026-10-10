@@ -105,7 +105,6 @@ mise を使う場合は、`mise install` で `mise.toml` の版のツールを�
 | --- | --- | --- |
 | 環境構築 | `node scripts/run.mjs setup` | Wails CLI を `.tools/` に導入し、Go と npm の依存（同梱用 tokscale を含む）、Go バインディング、ルートツリーを生成します |
 | 開発起動 | `node scripts/run.mjs dev` | 開発用の Vite はポート 9345 を使います（Wails の既定の 9245 は、ほかの Wails プロジェクトと重なりやすいため変えています）。アプリがタスクトレイに常駐します。ウィンドウは最初は表示せず、トレイのアイコンのクリックか、トレイのメニューの `Open` で開きます |
-| Styleを追加するモック | `node scripts/run.mjs dev:mock` | `dev` と同じ起動で、`Styles` の `Add style` でフォルダーを指定すると、検査とコピーの代わりに `frontend/mocks/added-style.json` の定義を一覧へ加える。そのプレビューは Bars のテンプレートで描く。同じ定義をもう一度加えると `This style id is already defined.` を表示する。フォルダー選択を取り消しても一覧は変わらない。`dev` と本番ビルドはこのファイルを読まず、定義を加えない。本番ビルドで `WAILS_FRONTEND_MODE=mock` を付けると、画面のビルドを止める |
 | 終了 | トレイのメニューの `Exit`、または起動したターミナルで Ctrl+C | `Exit` でアプリが終了します。`dev` では、変更を監視する `wails3 dev` と Vite が `Exit` の後も残るため、ターミナルで Ctrl+C を押して止めます。ウィンドウの閉じるボタンではウィンドウを隠すだけです |
 | 全体検証 | `node scripts/run.mjs verify` | 生成、型検査、Lint、単体テスト、Go のテストと vet、文書検査、E2E がすべて合格します。生成のあと、画面の検査と検証用サーバーのビルド、Go のテスト、vet、文書検査を並列に実行し、出力の各行に `[check:go]` のようにタスク名を付けます |
 | TURZX 実機の列挙 | `$env:TURZX_DEVICE_TEST='1'; go test -run TestListConnected -v ./internal/turzx` | 接続中の TURZX が `TURZX1.0 (633A6E01)` の形式の表示名で列挙されます。TURZX を接続した PC で手動で実行します |

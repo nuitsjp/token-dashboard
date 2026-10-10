@@ -26,6 +26,7 @@ import (
 	"token-monitor-turzx/internal/hub"
 	"token-monitor-turzx/internal/localusage"
 	"token-monitor-turzx/internal/settings"
+	"token-monitor-turzx/internal/styles"
 	"token-monitor-turzx/internal/turzx"
 	"token-monitor-turzx/internal/updates"
 	"token-monitor-turzx/internal/usage"
@@ -116,6 +117,7 @@ func run() error {
 	settingsService := settings.New(filepath.Join(dir, "settings.json"), cfg.ID, turzx.List, logger)
 	info := desktop.Info{Name: cfg.Name, Version: cfg.Version, AppID: cfg.ID, Server: serverMode, UpdateConfigured: cfg.UpdateSource != "" && cfg.UpdatePublicKey != "", DiagnosticsAvailable: diagnosticsAvailable}
 	appService := desktop.New(info, state, controls, logger)
+	styleService := styles.New(filepath.Join(dir, "styles"), logger)
 	updateConfig := updates.Config{
 		AppID: cfg.ID, Version: cfg.Version, Arch: runtime.GOARCH, Source: cfg.UpdateSource, PublicKey: cfg.UpdatePublicKey,
 		CacheDir: filepath.Join(dir, "updates"), Enabled: runtime.GOOS == "windows" && !serverMode,
@@ -132,7 +134,7 @@ func run() error {
 	options := application.Options{
 		Name: cfg.Name, Description: "利用状況を TURZX に表示する常駐アプリ", Logger: logger,
 		Assets:       application.AssetOptions{Handler: application.BundledAssetFileServer(root), DisableLogging: true},
-		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(updateService), application.NewService(displayService)},
+		Services:     []application.Service{application.NewService(settingsService), application.NewService(appService), application.NewService(styleService), application.NewService(updateService), application.NewService(displayService)},
 		MarshalError: fault.Marshal,
 		ShouldQuit:   controls.ShouldQuit,
 		OnShutdown: func() {

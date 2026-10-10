@@ -1,18 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Group } from '@mantine/core';
+import { Button, Group, Stack } from '@mantine/core';
 import { importStyleFolder } from '../../features/styles/catalog';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 
-export function AddStyle() {
+export function AddStyle({ heading }: { heading: ReactNode }) {
   const client = useQueryClient();
-  const picker = useRef<HTMLInputElement>(null);
-  useEffect(() => { picker.current?.setAttribute('webkitdirectory', ''); }, []);
   const [error, setError] = useState<unknown>(null);
-  async function pick(input: HTMLInputElement) {
-    const selected = (input.files?.length ?? 0) > 0;
-    input.value = '';
-    if (!selected) return;
+  async function pick() {
     try {
       await importStyleFolder();
       setError(null);
@@ -21,9 +16,11 @@ export function AddStyle() {
       setError(failure);
     }
   }
-  return <Group>
-    <Button onClick={() => picker.current?.click()}>Add style</Button>
-    <input ref={picker} type="file" hidden multiple onChange={event => void pick(event.currentTarget)} />
+  return <Stack gap="sm">
+    <Group justify="space-between" align="center">
+      {heading}
+      <Button onClick={() => void pick()}>Add style</Button>
+    </Group>
     <ErrorNotice error={error} />
-  </Group>;
+  </Stack>;
 }

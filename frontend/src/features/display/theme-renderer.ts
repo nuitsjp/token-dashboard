@@ -1,4 +1,5 @@
 import Handlebars from 'handlebars/runtime';
+import HandlebarsCompiler from 'handlebars';
 import { Events } from '@wailsio/runtime';
 import * as Display from '@bindings/token-monitor-turzx/internal/display/service';
 import type { FrameRequest, ThemeData } from '@bindings/token-monitor-turzx/internal/display/models';
@@ -25,10 +26,12 @@ const themes = new Map(Object.entries(manifests).map(([path, manifest]) => {
   return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet, shrinkTokens: manifest.id === 'bars' }] as [string, LoadedTheme];
 }));
 
-export function shareTheme(id: string, sourceId: string) {
-  const source = themes.get(sourceId);
-  if (!source) throw new Error(`Unknown display theme: ${sourceId}`);
-  themes.set(id, { ...source });
+export function registerTheme(id: string, template: string, stylesheet: string) {
+  themes.set(id, {
+    template: HandlebarsCompiler.compile<ThemeData>(template, { strict: true }),
+    stylesheet,
+    shrinkTokens: template.includes('tokensFontSize'),
+  });
 }
 
 let gate = Promise.resolve();

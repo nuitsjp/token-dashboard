@@ -70,13 +70,13 @@ try {
     // Needs gh to read the latest release. The result is site/dist.
     run(process.execPath, ['site/build.mjs']);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | dev:mock | build | package | server | verify | test:core | test:desktop | tag [version] | release <args> | site');
+    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | tag [version] | release <args> | site');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
-    if (command === 'dev' || command === 'dev:mock') {
+    if (command === 'dev') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
       // Not the Wails default 9245, which other Wails projects on this PC also use.
-      run(cli, ['dev', '-port', '9345'], root, command === 'dev:mock' ? { WAILS_FRONTEND_MODE: 'mock' } : {});
+      run(cli, ['dev', '-port', '9345'], root);
     } else if (command === 'test:desktop') {
       // Installs, updates and uninstalls the desktop app; never part of verify.
       run(cli, ['task', 'build:server']);

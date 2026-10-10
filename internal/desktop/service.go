@@ -4,6 +4,7 @@ package desktop
 import (
 	"log/slog"
 	"sync/atomic"
+
 	"token-monitor-turzx/internal/appstate"
 	"token-monitor-turzx/internal/fault"
 )
@@ -36,7 +37,15 @@ func New(info Info, state *appstate.State, controls *Controls, logger *slog.Logg
 	return &Service{info: info, state: state, controls: controls, logger: logger}
 }
 func (s *Service) GetInfo() Info { return s.info }
-func (s *Service) Ready()        { s.controls.Ready.Store(true) }
+
+// ChooseStyleFolder opens a folder dialog that lists the files inside. Only a folder can be chosen.
+func (s *Service) ChooseStyleFolder() (string, error) {
+	if s.info.Server {
+		return "", fault.New("DESKTOP_ONLY", "Folder selection is available in the desktop app.")
+	}
+	return chooseStyleFolder()
+}
+func (s *Service) Ready() { s.controls.Ready.Store(true) }
 func (s *Service) ConfirmQuit() error {
 	if s.info.Server {
 		return fault.New("DESKTOP_ONLY", "終了操作はデスクトップ版で行ってください。")

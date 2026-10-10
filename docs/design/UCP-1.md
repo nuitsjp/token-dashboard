@@ -14,7 +14,8 @@
 | 利用枠の選択 | `Display` 画面の `Usage Limits` で、契約と枠の表示・非表示を選ぶ。表示しない枠の識別子を設定ファイルの `hiddenLimits` に保存し、保存のたびに描画へ再生成を求める。描画は、最新状態から表示しない枠を取り除いたものに、契約の選び方・並び順の規則を適用する。保存に失敗したときは、選択も表示画像も変えずにエラーを返す。保存済みの選択を読めないときは、すべての枠を描く | `internal/display/limits.go`、`internal/display/service.go`、`internal/settings/service.go`、`frontend/src/usecases/show-usage/UsageLimitSelect.tsx`、`frontend/src/features/display/queries.ts` |
 | プレビュー配信 | 本体の Wails サービス。最新の表示画像を画面へ返し、画像の更新をイベントで通知する | `internal/display/service.go` |
 | プレビュー区画 | ウィンドウで最新の表示画像を表示する。画像を描かず、状態も持たない | `frontend/src/usecases/show-usage/UsagePreview.tsx`、`frontend/src/features/display/queries.ts` |
-| スタイル一覧 | ビルドに含まれるテーマ定義を列挙する。組み込みの Gauges と Bars は常に先に出し、各スタイルで描いたプレビューを見せる。TURZX へ送る画像と、現在の表示に使っているスタイルは変えない | `frontend/src/features/styles/catalog.ts`、`frontend/src/usecases/browse-styles/StyleList.tsx`、`frontend/src/routes/styles.tsx`、`frontend/src/app/Shell.tsx`、`frontend/src/features/display/theme-renderer.ts` |
+| スタイル一覧 | ビルドに含まれるテーマ定義と、アプリ内部に取り込んだ表示スタイルを列挙する。組み込みの Gauges と Bars は常に先に出し、各スタイルで描いたプレビューを見せる。TURZX へ送る画像と、現在の表示に使っているスタイルは変えない | `frontend/src/features/styles/catalog.ts`、`frontend/src/usecases/browse-styles/StyleList.tsx`、`frontend/src/routes/styles.tsx`、`frontend/src/app/Shell.tsx`、`frontend/src/features/display/theme-renderer.ts`、`internal/styles/service.go` |
+| スタイルの取り込み | 指定フォルダーを検査し、合格したファイルだけをアプリ内部の定義置き場へコピーして定義に加える。取消、不合格、識別子の重複、コピー失敗では定義も内部のファイルも変えない | `internal/styles/service.go`、`internal/desktop/service.go`、`frontend/src/usecases/add-style/AddStyle.tsx`、`frontend/src/features/styles/catalog.ts`、`frontend/src/features/styles/prepare.ts` |
 
 ```mermaid
 sequenceDiagram
@@ -41,6 +42,6 @@ sequenceDiagram
 ```
 
 - 整合性: 状態更新の主体は最新状態 / 結果確定点はメモリ上の最新状態の置き換えと、要求識別子が一致する画像結果の受領 / 障害時は、受信の失敗では最後の最新状態と表示を保ったまま再接続を続け、描画の失敗・応答期限切れでは前回の表示を保ち、次の状態変更または定期更新で再生成する。TURZXの送信失敗では画像を捨てて再接続後に最新の画像を送る。いずれも他の処理とアプリを止めない / 境界は、描画を逐次にし、送信は最新の1枚だけで追いつくようにすること。
-- モックに置き換える境界と合成点: 本番の実行経路は Hub 受信とローカル取得の実処理だけを使い、最新状態へ仕様合意用の固定データを入れる分岐は置かない。Hub 経路の検証時は、接続設定の URL を制御可能な SSE サーバーへ向け、受信・描画・プレビュー配信は本番の処理を使う。「Style一覧を閲覧する」の段階2・3では、定義一覧を固定ファイルへ差し替えた。段階4で削除し、現在はビルドに含まれるテーマ定義を一覧にする。「Styleを追加する」の段階2・3では、`dev:mock` のときだけ、フォルダー指定の結果を `frontend/mocks/added-style.json` の定義に差し替える。そのプレビューは Bars のテンプレートで描く。一覧の並び、現在の表示スタイル、TURZX への送信は本番の処理を使う。`dev` と本番ビルドはこのファイルを読まず、定義を加えない。起動・終了と検証の手順は [プロジェクト定義](../project.md#execution) を参照する。
+- モックに置き換える境界と合成点: 本番の実行経路は Hub 受信とローカル取得の実処理だけを使い、最新状態へ仕様合意用の固定データを入れる分岐は置かない。Hub 経路の検証時は、接続設定の URL を制御可能な SSE サーバーへ向け、受信・描画・プレビュー配信は本番の処理を使う。「Style一覧を閲覧する」の段階2・3では、定義一覧を固定ファイルへ差し替えた。段階4で削除し、現在はビルドに含まれるテーマ定義を一覧にする。「Styleを追加する」は、指定したフォルダーを検査してアプリ内部の定義置き場へコピーし、その定義で一覧を作り直す。一覧の並び、現在の表示スタイル、TURZX への送信は本番の処理を使う。起動・終了と検証の手順は [プロジェクト定義](../project.md#execution) を参照する。
 
-UC 固有の逸脱: 「Style一覧を閲覧する」は、その時点の表示スタイル定義を列挙し、各スタイルで描いたプレビューを一覧に出す。TURZX へ送る画像と、現在の表示に使っているスタイルは変えない。「Styleを追加する」は、指定したフォルダーから表示スタイルの定義を1つ加える。段階2・3では、検査とコピーの代わりに固定の定義を加える。
+UC 固有の逸脱: 「Style一覧を閲覧する」は、その時点の表示スタイル定義を列挙し、各スタイルで描いたプレビューを一覧に出す。TURZX へ送る画像と、現在の表示に使っているスタイルは変えない。「Styleを追加する」は、指定したフォルダーを検査し、合格したファイルをアプリ内部へコピーして定義を1つ加える。
