@@ -135,14 +135,17 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
         await expect(page.getByRole('article', { name }).getByRole('button')).toHaveCount(0);
         await expect(page.getByRole('article', { name }).getByRole('textbox')).toHaveCount(0);
       }
+      await expect.poll(async () => (await preview(page, 'Gauges preview')).length).toBeGreaterThan(5000);
+      await expect.poll(async () => (await preview(page, 'Bars preview')).length).toBeGreaterThan(5000);
       const gauges = await colours(page, await preview(page, 'Gauges preview'));
-      const bars = await colours(page, await preview(page, 'Bars preview'));
       expect(gauges.size).toEqual([1920, 462]);
-      expect(bars.size).toEqual([1920, 462]);
       expect(gauges.alphaBarStart).not.toEqual(danger);
-      expect(bars.divider).toEqual(line);
-      expect(bars.alphaBarStart).toEqual(danger);
-      expect(bars.alphaBarMiddle).toEqual(line);
+      // The waiting image is already full size. The divider exists only after the Hub snapshot is drawn.
+      await expect.poll(async () => {
+        const sample = await colours(page, await preview(page, 'Bars preview'));
+        return [sample.size, sample.divider, sample.alphaBarStart, sample.alphaBarMiddle];
+      }, { timeout: 30_000 }).toEqual([[1920, 462], line, danger, line]);
+      await expect(page.getByRole('alert')).toHaveCount(0);
     });
     const labels = ['Gauges Built-in In use', 'Bars Built-in'];
     await test.step('手順2', async () => {
