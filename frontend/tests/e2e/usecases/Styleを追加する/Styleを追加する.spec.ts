@@ -116,6 +116,7 @@ test('組み込み以外の表示スタイルを1つアプリの定義に加え�
   const hub = await startHub();
   saveSettings(dataDir, hub.url);
   let pid = 0;
+  let cleanupError: unknown;
   try {
     startApp(dataDir);
     pid = (await waitFor('the app to start', () => appProcesses(exe)))[0];
@@ -181,11 +182,13 @@ test('組み込み以外の表示スタイルを1つアプリの定義に加え�
     for (let attempt = 0; attempt < 20; attempt++) {
       try {
         rmSync(work, { recursive: true, force: true });
+        cleanupError = undefined;
         break;
       } catch (error) {
-        if (attempt === 19) throw error;
-        await new Promise(done => setTimeout(done, 300));
+        cleanupError = error;
+        if (attempt < 19) await new Promise(done => setTimeout(done, 300));
       }
     }
   }
+  if (cleanupError) throw cleanupError;
 });
