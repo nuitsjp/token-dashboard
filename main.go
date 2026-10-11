@@ -126,10 +126,7 @@ func run() error {
 	usageState := usage.NewState()
 	displayService := &display.Service{State: usageState, Logger: logger, Cycle: func() (bool, time.Duration) {
 			on, seconds := settings.CycleSetting(settingsService)
-			if shortIntervals() {
-				return on, cycleInterval()
-			}
-			return on, time.Duration(seconds) * time.Second
+			return on, cycleEvery(seconds)
 		},
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
@@ -308,12 +305,12 @@ func localIntervals() localusage.Intervals {
 	return localusage.DefaultIntervals
 }
 
-// cycleInterval is how long each page stays when the contracts cycle.
-func cycleInterval() time.Duration {
+// cycleEvery is how long each page stays for the saved seconds; the E2E tests wait a tenth of it.
+func cycleEvery(seconds int) time.Duration {
 	if shortIntervals() {
-		return time.Second
+		return time.Duration(seconds) * 100 * time.Millisecond
 	}
-	return 10 * time.Second
+	return time.Duration(seconds) * time.Second
 }
 
 // redrawInterval is the longest time between two images, which keeps the time until reset current.

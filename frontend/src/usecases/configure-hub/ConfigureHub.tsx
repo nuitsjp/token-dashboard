@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
@@ -55,13 +55,17 @@ export function ConnectionSettings() {
 // at the right end. Every choice applies and saves at once.
 export function StyleSelect() {
   const draft = useSettingsDraft();
-  const [text, setText] = useState<number | string>('');
+  const [text, setTextState] = useState<number | string>('');
+  // The latest entry, which a key press right after typing reads before the next render.
+  const entry = useRef<number | string>('');
+  const setText = (value: number | string) => { entry.current = value; setTextState(value); };
   const seconds = draft?.cycleSeconds;
   useEffect(() => { if (seconds !== undefined) setText(seconds); }, [seconds]);
   if (!draft) return null;
   // An unchanged or invalid entry shows the saved value again; the server refuses a value out of range.
   const commit = () => {
-    if (typeof text === 'number' && text !== draft.cycleSeconds) draft.setCycleSeconds(text);
+    const value = entry.current;
+    if (typeof value === 'number' && value >= 5 && value <= 3600 && value !== draft.cycleSeconds) draft.setCycleSeconds(value);
     else setText(draft.cycleSeconds);
   };
   return <Group gap="md" wrap="nowrap" justify="space-between" style={{ flex: 1 }}>
