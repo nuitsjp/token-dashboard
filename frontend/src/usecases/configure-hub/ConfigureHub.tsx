@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
+import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
+import { getCycle, useSetCycle } from '../../features/display/queries';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { automatic, useSettingsDraft } from './SettingsDraft';
 import styles from './ConfigureHub.module.css';
@@ -49,12 +51,18 @@ export function ConnectionSettings() {
   </Card>;
 }
 
-// The style choice sits right of the Style title. It applies and saves at once.
+// The style choice and the cycle switch sit right of the Style title. Both apply at once.
 export function StyleSelect() {
   const draft = useSettingsDraft();
+  const cycle = useQuery(getCycle());
+  const setCycle = useSetCycle();
   if (!draft) return null;
-  return <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
-    onChange={value => { if (value) draft.setStyle(value); }} />;
+  return <Group gap="md" wrap="nowrap">
+    <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
+      onChange={value => { if (value) draft.setStyle(value); }} />
+    <Switch label="Cycle" aria-label="Cycle" checked={cycle.data ?? false} disabled={cycle.data === undefined || setCycle.isPending}
+      onChange={e => setCycle.mutate(e.currentTarget.checked)} />
+  </Group>;
 }
 
 export function StyleError() {

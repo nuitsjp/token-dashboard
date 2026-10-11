@@ -17,6 +17,9 @@ type ThemeData struct {
 	Tokens         []ThemeToken    `json:"tokens"`
 	GaugePanels    []ThemeContract `json:"gaugePanels"`
 	BarColumns     []ThemeColumn   `json:"barColumns"`
+	// GaugePages and BarPages count the pages of each style; the data above is one of them.
+	GaugePages int `json:"-"`
+	BarPages   int `json:"-"`
 }
 
 type ThemeToken struct {
@@ -58,9 +61,10 @@ type ThemeWindow struct {
 	HasRemaining     bool     `json:"hasRemaining"`
 }
 
-// themeData preserves the display's existing grouping, order and capacity limits.
-// The caller removes hidden windows before preparing this data.
-func themeData(stats *usage.Stats, now time.Time, source string) ThemeData {
+// themeData preserves the display's existing grouping, order and capacity limits. The contracts that
+// do not fit the first page fill the later pages, and page picks one of them (the first when it is
+// out of range). The caller removes hidden windows before preparing this data.
+func themeData(stats *usage.Stats, now time.Time, source string, page int) ThemeData {
 	data := ThemeData{
 		WaitingMessage: "Waiting for Hub", Tokens: []ThemeToken{},
 		GaugePanels: []ThemeContract{}, BarColumns: []ThemeColumn{},
@@ -81,40 +85,48 @@ func themeData(stats *usage.Stats, now time.Time, source string) ThemeData {
 			CostText: usd(period.value.CostUSD), TokensFontSize: 42,
 		})
 	}
-	usedColumns := 0
-	for _, p := range panels(stats.Limits) {
-		if usedColumns+len(p.circles) > gaugeColumns {
-			continue
-		}
-		contract := ThemeContract{Provider: p.provider, Plan: p.plan, Span: len(p.circles)}
-		icon := strings.ToLower(p.provider) + ".png"
-		if _, err := fs.Stat(iconFiles, "icons/"+icon); err == nil {
-			contract.Icon = "/assets/agents/" + icon
-		}
-		for _, c := range p.circles {
-			circle := ThemeCircle{Name: groupOf(c.windows[0]), Double: len(c.windows) == 2, ShowName: p.groups > 1}
-			for _, w := range c.windows {
-				window := themeWindow(w, now)
-				if w.RemainingPercent != nil {
-					window.PercentText = fmt.Sprintf("%.0f%%", math.Round(*w.RemainingPercent))
-				}
-				circle.Windows = append(circle.Windows, window)
-			}
-			contract.Circles = append(contract.Circles, circle)
-		}
-		data.GaugePanels = append(data.GaugePanels, contract)
-		usedColumns += contract.Span
+	gaugePanels, barColumns := gaugePages(panels(stats.Limits)), layoutPages(groups(stats.Limits))
+	data.GaugePages, data.BarPages = len(gaugePanels), len(barColumns)
+	gaugePage, barPage := page, page
+	if gaugePage < 0 || gaugePage >= len(gaugePanels) {
+		gaugePage = 0
 	}
-	for _, column := range layout(groups(stats.Limits)) {
-		out := ThemeColumn{}
-		for _, g := range column {
-			contract := ThemeContract{Provider: g.name, Plan: g.plan}
-			for _, w := range g.windows {
-				contract.Windows = append(contract.Windows, themeWindow(w, now))
+	if barPage < 0 || barPage >= len(barColumns) {
+		barPage = 0
+	}
+	if len(gaugePanels) > 0 {
+		for _, p := range gaugePanels[gaugePage] {
+			contract := ThemeContract{Provider: p.provider, Plan: p.plan, Span: len(p.circles)}
+			icon := strings.ToLower(p.provider) + ".png"
+			if _, err := fs.Stat(iconFiles, "icons/"+icon); err == nil {
+				contract.Icon = "/assets/agents/" + icon
 			}
-			out.Contracts = append(out.Contracts, contract)
+			for _, c := range p.circles {
+				circle := ThemeCircle{Name: groupOf(c.windows[0]), Double: len(c.windows) == 2, ShowName: p.groups > 1}
+				for _, w := range c.windows {
+					window := themeWindow(w, now)
+					if w.RemainingPercent != nil {
+						window.PercentText = fmt.Sprintf("%.0f%%", math.Round(*w.RemainingPercent))
+					}
+					circle.Windows = append(circle.Windows, window)
+				}
+				contract.Circles = append(contract.Circles, circle)
+			}
+			data.GaugePanels = append(data.GaugePanels, contract)
 		}
-		data.BarColumns = append(data.BarColumns, out)
+	}
+	if len(barColumns) > 0 {
+		for _, column := range barColumns[barPage] {
+			out := ThemeColumn{}
+			for _, g := range column {
+				contract := ThemeContract{Provider: g.name, Plan: g.plan}
+				for _, w := range g.windows {
+					contract.Windows = append(contract.Windows, themeWindow(w, now))
+				}
+				out.Contracts = append(out.Contracts, contract)
+			}
+			data.BarColumns = append(data.BarColumns, out)
+		}
 	}
 	return data
 }

@@ -168,7 +168,7 @@ func run() error {
 		sink = output.Submit
 	}
 	settingsService.OnStyleSaved = usageState.Touch
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
+	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), cycleInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -300,6 +300,14 @@ func localIntervals() localusage.Intervals {
 		return localusage.Intervals{Settle: 200 * time.Millisecond, Graph: time.Second, Poll: time.Second, Limits: time.Second, MaxSyncDelay: 4 * time.Second}
 	}
 	return localusage.DefaultIntervals
+}
+
+// cycleInterval is how long each page stays when the contracts cycle.
+func cycleInterval() time.Duration {
+	if shortIntervals() {
+		return time.Second
+	}
+	return 10 * time.Second
 }
 
 // redrawInterval is the longest time between two images, which keeps the time until reset current.

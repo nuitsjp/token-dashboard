@@ -28,6 +28,8 @@ type FrameRequest struct {
 type Frame struct {
 	PNG  []byte
 	JPEG []byte
+	// Pages is how many pages the style has; the frame is one of them.
+	Pages int
 }
 
 type frameResult struct {
@@ -51,14 +53,14 @@ func NewCanvasRenderer(service *Service, emit func(string, any)) *CanvasRenderer
 	return &CanvasRenderer{service: service, emit: emit, responseTimeout: 10 * time.Second}
 }
 
-func (r *CanvasRenderer) Render(ctx context.Context, stats *usage.Stats, now time.Time, source string, style Style) (Frame, error) {
+func (r *CanvasRenderer) Render(ctx context.Context, stats *usage.Stats, now time.Time, source string, style Style, page int) (Frame, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, r.responseTimeout)
 	defer cancel()
 	s := r.service
 	s.mu.Lock()
 	s.nextFrame++
 	pending := &pendingFrame{
-		request: FrameRequest{ID: s.nextFrame, Theme: strings.ToLower(string(style)), Data: themeData(stats, now, source)},
+		request: FrameRequest{ID: s.nextFrame, Theme: strings.ToLower(string(style)), Data: themeData(stats, now, source, page)},
 		result:  make(chan frameResult, 1),
 	}
 	s.pending = pending
@@ -78,7 +80,12 @@ func (r *CanvasRenderer) Render(ctx context.Context, stats *usage.Stats, now tim
 		}
 		return Frame{}, fmt.Errorf("canvas rendering: response timed out: %w", waitCtx.Err())
 	case result := <-pending.result:
-		return result.frame, result.err
+		frame := result.frame
+		frame.Pages = pending.request.Data.GaugePages
+		if style == Bars {
+			frame.Pages = pending.request.Data.BarPages
+		}
+		return frame, result.err
 	}
 }
 

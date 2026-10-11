@@ -195,6 +195,30 @@ func panels(limits usage.Limits) []panel {
 	return out
 }
 
+// gaugePages puts each contract, in order, on the leftmost free columns of a page. A contract with more
+// circles than there are free columns goes to a later page. One that is wider than a page is never drawn.
+func gaugePages(ps []panel) [][]panel {
+	var pages [][]panel
+	for len(ps) > 0 {
+		var page, left []panel
+		col := 0
+		for _, p := range ps {
+			if col+len(p.circles) > gaugeColumns {
+				left = append(left, p)
+				continue
+			}
+			page = append(page, p)
+			col += len(p.circles)
+		}
+		if len(page) == 0 {
+			break
+		}
+		pages = append(pages, page)
+		ps = left
+	}
+	return pages
+}
+
 func (p panel) width() int { return len(p.circles)*gaugeColumnWidth - panelGap }
 
 // gauges puts each contract, in order, on the leftmost free columns. A contract with more circles than

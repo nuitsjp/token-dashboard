@@ -1,6 +1,7 @@
 package display
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func themeProvider(name string, values ...float64) usage.Provider {
 // Nil snapshots must display the selected source's waiting message, without invented statistics.
 func TestThemeDataWaiting(t *testing.T) {
 	for _, source := range []string{"Hub", "Local"} {
-		data := themeData(nil, time.Now(), source)
+		data := themeData(nil, time.Now(), source, 0)
 		want := "Waiting for Hub"
 		if source == "Local" {
 			want = "Waiting for local usage"
@@ -41,7 +42,7 @@ func TestThemeDataOrderAndCapacity(t *testing.T) {
 		themeProvider("cursor", 95, 71, 100), themeProvider("unknown", -1), themeProvider("opencode", 100, 97, 89),
 		themeProvider("copilot", 42), themeProvider("grok", 87),
 	}}}
-	data := themeData(stats, time.Now(), "Hub")
+	data := themeData(stats, time.Now(), "Hub", 0)
 	var barNames [][]string
 	for _, column := range data.BarColumns {
 		var names []string
@@ -77,7 +78,7 @@ func TestThemeDataAfterHiddenSelection(t *testing.T) {
 	stats.Limits.Providers[0].Windows[0].Label = "Session"
 	stats.Limits.Providers[0].Windows[1].Label = "Weekly"
 	hidden := map[string]bool{windowKey(stats.Limits.Providers[0], stats.Limits.Providers[0].Windows[0]): true}
-	data := themeData(withoutHidden(stats, hidden), time.Now(), "Hub")
+	data := themeData(withoutHidden(stats, hidden), time.Now(), "Hub", 0)
 	if data.GaugePanels[0].Provider != "codex" || data.BarColumns[0].Contracts[0].Provider != "codex" {
 		t.Fatalf("hidden lowest value still affects order: %+v", data)
 	}
@@ -98,7 +99,7 @@ func TestThemeDataDoubleWindowsAndGroups(t *testing.T) {
 	p.Windows[1].Kind, p.Windows[1].Label = "session", "Model A Session"
 	p.Windows[2].Kind, p.Windows[2].Label = "daily", "Model B Daily"
 	p.Windows[3].ShowMeter = false
-	data := themeData(&usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{p}}}, time.Now(), "Hub")
+	data := themeData(&usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{p}}}, time.Now(), "Hub", 0)
 	panel := data.GaugePanels[0]
 	if panel.Span != 2 || panel.Plan != "Max" || panel.Icon != "/assets/agents/claude.png" {
 		t.Fatalf("panel: %+v", panel)
@@ -121,7 +122,7 @@ func TestThemeDataUnknownAndPace(t *testing.T) {
 	data := themeData(&usage.Stats{
 		Periods: usage.Periods{Today: usage.Period{TotalTokens: 1234567, CostUSD: 12.34}},
 		Limits:  usage.Limits{Providers: []usage.Provider{p}},
-	}, now, "Hub")
+	}, now, "Hub", 0)
 	windows := data.BarColumns[0].Contracts[0].Windows
 	if windows[0].HasRemaining || windows[0].RemainingPercent != nil || windows[0].PercentText != "—" || windows[0].ResetText != "—" || windows[0].BarResetText != "" || windows[0].Label != "daily" {
 		t.Fatalf("unknown report: %+v", windows[0])
@@ -140,7 +141,7 @@ func TestThemeDataUnknownAndPace(t *testing.T) {
 // The two styles retain their existing rounding, while SVG fills stay in the track.
 func TestThemeDataRoundingAndFillBounds(t *testing.T) {
 	p := themeProvider("claude", 72.5, 120, -1)
-	data := themeData(&usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{p}}}, time.Now(), "Hub")
+	data := themeData(&usage.Stats{Limits: usage.Limits{Providers: []usage.Provider{p}}}, time.Now(), "Hub", 0)
 	if got := data.GaugePanels[0].Circles[0].Windows[0].PercentText; got != "73%" {
 		t.Fatalf("gauge rounding: %s", got)
 	}
@@ -152,5 +153,29 @@ func TestThemeDataRoundingAndFillBounds(t *testing.T) {
 	}
 	if got := *p.Windows[1].RemainingPercent; got != 120 {
 		t.Fatalf("shared report changed: %v", got)
+	}
+}
+
+// Contracts that do not fit the first page fill the later pages in order; the first page is what is
+// drawn without cycling, and a page past the end falls back to the first.
+func TestThemeDataPages(t *testing.T) {
+	var providers []usage.Provider
+	for i := range 10 { // 2 windows each: two contracts per bar column, four columns, so 8 per page
+		providers = append(providers, themeProvider(fmt.Sprintf("p%d", i), float64(10+i), 50))
+	}
+	stats := &usage.Stats{Limits: usage.Limits{Providers: providers}}
+	first := themeData(stats, time.Now(), "Hub", 0)
+	second := themeData(stats, time.Now(), "Hub", 1)
+	if first.BarPages != 2 || len(first.BarColumns) != 4 || first.BarColumns[0].Contracts[0].Provider != "p0" {
+		t.Fatalf("first bar page: pages=%d %+v", first.BarPages, first.BarColumns)
+	}
+	if len(second.BarColumns) != 1 || len(second.BarColumns[0].Contracts) != 2 || second.BarColumns[0].Contracts[0].Provider != "p8" {
+		t.Fatalf("second bar page: %+v", second.BarColumns)
+	}
+	if again := themeData(stats, time.Now(), "Hub", 2); again.BarColumns[0].Contracts[0].Provider != "p0" {
+		t.Fatalf("page past the end: %+v", again.BarColumns)
+	}
+	if first.GaugePages < 2 || len(second.GaugePanels) == 0 || second.GaugePanels[0].Provider == first.GaugePanels[0].Provider {
+		t.Fatalf("gauge pages: %d, %+v / %+v", first.GaugePages, first.GaugePanels, second.GaugePanels)
 	}
 }

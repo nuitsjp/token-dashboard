@@ -173,30 +173,48 @@ const (
 	columnGroups = 2 // contracts per column
 )
 
-// layout sorts groups by their lowest remaining percent, keeping Hub order for ties, and puts
+// layoutPages sorts groups by their lowest remaining percent, keeping Hub order for ties, and puts
 // each under the leftmost column that stays within columnRows windows and columnGroups contracts.
-// A group that would need a fifth column is not shown.
-func layout(gs []group) [][]group {
-	sorted := slices.Clone(gs)
-	slices.SortStableFunc(sorted, func(a, b group) int { return cmp.Compare(a.lowest(), b.lowest()) })
-	var out [][]group
-	rows := []int{}
-	for _, g := range sorted {
-		placed := false
-		for i := range out {
-			if len(out[i]) < columnGroups && rows[i]+len(g.windows) <= columnRows {
-				out[i] = append(out[i], g)
-				rows[i] += len(g.windows)
-				placed = true
-				break
+// A group that would need a fifth column goes to the next page, which is laid out the same way.
+func layoutPages(gs []group) [][][]group {
+	rest := slices.Clone(gs)
+	slices.SortStableFunc(rest, func(a, b group) int { return cmp.Compare(a.lowest(), b.lowest()) })
+	var pages [][][]group
+	for len(rest) > 0 {
+		var out [][]group
+		var left []group
+		rows := []int{}
+		for _, g := range rest {
+			placed := false
+			for i := range out {
+				if len(out[i]) < columnGroups && rows[i]+len(g.windows) <= columnRows {
+					out[i] = append(out[i], g)
+					rows[i] += len(g.windows)
+					placed = true
+					break
+				}
+			}
+			switch {
+			case placed:
+			case len(out) < columns:
+				out = append(out, []group{g})
+				rows = append(rows, len(g.windows))
+			default:
+				left = append(left, g)
 			}
 		}
-		if !placed && len(out) < columns {
-			out = append(out, []group{g})
-			rows = append(rows, len(g.windows))
-		}
+		pages = append(pages, out)
+		rest = left
 	}
-	return out
+	return pages
+}
+
+// layout is the first page of layoutPages: what is drawn when the pages do not cycle.
+func layout(gs []group) [][]group {
+	if pages := layoutPages(gs); len(pages) > 0 {
+		return pages[0]
+	}
+	return nil
 }
 
 // limits draws the columns left to right, each contract with its name and plan on one line

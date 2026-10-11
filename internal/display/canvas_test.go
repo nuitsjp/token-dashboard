@@ -40,7 +40,7 @@ func TestCanvasFramePublishesOnlyTheMatchingRequest(t *testing.T) {
 	defer cancel()
 	done := make(chan frameResult, 1)
 	go func() {
-		frame, err := r.Render(ctx, nil, time.Now(), "Local", Bars)
+		frame, err := r.Render(ctx, nil, time.Now(), "Local", Bars, 0)
 		done <- frameResult{frame, err}
 	}()
 	<-requested
@@ -77,7 +77,7 @@ func TestCanvasRenderCancellationAndFailure(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		done := make(chan error, 1)
 		go func() {
-			_, err := r.Render(ctx, nil, time.Now(), "Hub", Gauges)
+			_, err := r.Render(ctx, nil, time.Now(), "Hub", Gauges, 0)
 			done <- err
 		}()
 		<-requested
@@ -111,7 +111,7 @@ func TestCanvasRenderTimeoutAllowsNextFrame(t *testing.T) {
 	defer cancel()
 	done := make(chan frameResult, 1)
 	render := func() {
-		frame, err := r.Render(ctx, nil, time.Now(), "Local", Gauges)
+		frame, err := r.Render(ctx, nil, time.Now(), "Local", Gauges, 0)
 		done <- frameResult{frame, err}
 	}
 	go render()
@@ -179,7 +179,7 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			updated := make(chan struct{}, 1)
 			done := make(chan struct{})
 			go func() {
-				Run(ctx, s, r, state, redraw, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
+				Run(ctx, s, r, state, redraw, time.Hour, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
 				close(done)
 			}()
 			t.Cleanup(func() {
