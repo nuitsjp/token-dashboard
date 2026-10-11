@@ -34,6 +34,10 @@ type Service struct {
 	pending   *pendingFrame
 	shiftX    int
 	shiftY    int
+	// away is whether the user is away, and awayCh wakes Run when it changes.
+	away        bool
+	awayCh      chan struct{}
+	awayMinutes int
 }
 
 // shiftSteps are the offsets, in pixels, that the image for the TURZX takes in turn so that no pixel
@@ -116,6 +120,26 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 	defer shifter.Stop()
 	page, step := 0, 0
 	for {
+		// While away the TURZX shows black. The beat and a change of the usage send it again, so that a
+		// display plugged in during that time is switched off too. Back, the walk starts from the first
+		// position.
+		if away, wake := s.awayState(); away {
+			logger.Info("display_away", "away", true)
+			output(black())
+			for away, _ = s.awayState(); away; away, _ = s.awayState() {
+				select {
+				case <-ctx.Done():
+					return
+				case <-wake:
+				case <-state.Changed():
+					output(black())
+				case <-ticker.C:
+					output(black())
+				}
+			}
+			logger.Info("display_away", "away", false)
+			step = 0
+		}
 		s.setShift(step)
 		var d time.Duration
 		if cycle, d = s.cycleSetting(); d != every {
@@ -148,6 +172,7 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 			}
 		}
 		pages := frame.Pages
+		_, awayChanged := s.awayState()
 	wait:
 		for {
 			select {
@@ -156,6 +181,8 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 			case <-state.Changed():
 				break wait
 			case <-ticker.C:
+				break wait
+			case <-awayChanged:
 				break wait
 			case <-shifter.C:
 				step = (step + 1) % len(shiftSteps)

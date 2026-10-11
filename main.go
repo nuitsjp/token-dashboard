@@ -25,6 +25,7 @@ import (
 	"token-monitor-turzx/internal/fault"
 	"token-monitor-turzx/internal/hub"
 	"token-monitor-turzx/internal/localusage"
+	"token-monitor-turzx/internal/presence"
 	"token-monitor-turzx/internal/settings"
 	"token-monitor-turzx/internal/styles"
 	"token-monitor-turzx/internal/turzx"
@@ -172,6 +173,10 @@ func run() error {
 		sink = output.Submit
 	}
 	settingsService.OnDisplaySaved = usageState.Touch
+	if !serverMode {
+		conditions := presence.New(func(away bool) { display.SetAway(displayService, away) })
+		go presence.Watch(ctx, conditions, func() int { return displayService.AwayMinutes() * 60 })
+	}
 	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
