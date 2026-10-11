@@ -42,7 +42,13 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
   });
   const away = () => page.getByRole('textbox', { name: 'Away time' });
   const file = () => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
-  const preview = async () => (await page.getByRole('img', { name: 'Display preview' }).getAttribute('src')) ?? '';
+  // The preview is on the Display page, so it is read there and the Settings page is opened again.
+  const preview = async () => {
+    await page.getByRole('link', { name: 'Display' }).click();
+    const src = (await page.getByRole('img', { name: 'Display preview' }).getAttribute('src')) ?? '';
+    await page.getByRole('link', { name: 'Settings' }).click();
+    return src;
+  };
   const setAway = async (value: string) => { await away().fill(value); await away().press('Enter'); };
   // Nothing is drawn for the given time, though a new usage arrives meanwhile.
   const stays = async (ms = 3_000) => {
@@ -69,8 +75,9 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
       await expect(page.getByText('Saved.')).toBeVisible();
       await expect.poll(() => hub.streams()).toBe(1);
       hub.send('snapshot', stats(40));
-      await page.getByRole('link', { name: 'Display' }).click();
-      await expect(page.getByRole('img', { name: 'Display preview' })).toBeVisible();
+      // The Away time is set on the Settings page; the preview is read on the Display page.
+      await expect.poll(preview).toContain('data:image/png');
+      await page.getByRole('link', { name: 'Settings' }).click();
       await drawing();
     });
     await test.step('手順1', async () => {
@@ -143,6 +150,7 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
       page = await context.newPage();
       record(page);
       await page.goto(server.url);
+      await page.getByRole('link', { name: 'Settings' }).click();
       await expect(away()).toHaveValue('3 min');
       await drawing();
       signal(server.pid, 'lock');

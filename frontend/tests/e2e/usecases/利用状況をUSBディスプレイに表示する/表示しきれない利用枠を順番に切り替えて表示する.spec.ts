@@ -7,7 +7,8 @@ import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
 // The server build has no task tray and no TURZX output. Opening the page stands in for opening the
-// window and stopping the process for Exit. The server waits a tenth of the saved Cycle time, and the
+// window and stopping the process for Exit. Cycle is set on the Settings page of `page`, and the image is
+// watched on the Display page of `view`, a second window onto the same server. The server waits a tenth of the saved Cycle time, and the
 // page on show is told by the colour of the first bar of the Bars style: ten contracts of two windows
 // put eight on the first page, led by the lowest remaining (red), and two on the second (violet).
 const danger = [240, 97, 109];
@@ -48,11 +49,12 @@ async function colourAt(page: Page, [x, y]: number[]) {
 const shown = (page: Page) => colourAt(page, firstBar);
 
 test('Cycle を入れると、表示しきれない契約をページとして Cycle time ごとに順番に表示する', async ({ page, context }) => {
+  let view: Page = page;
   test.setTimeout(240_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-cycle-e2e-'));
   const hub = await startHub();
   let server = await startServer(dataDir, 34140, shortIntervals);
-  const style = () => page.getByRole('textbox', { name: 'Display style' });
+  const style = () => view.getByRole('textbox', { name: 'Display style' });
   const cycle = () => page.getByRole('switch', { name: 'Cycle' });
   const time = () => page.getByRole('textbox', { name: 'Cycle time' });
   const file = () => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
@@ -60,7 +62,7 @@ test('Cycle を入れると、表示しきれない契約をページとして C
   // Keeps watching the page on show, for a page that must not change.
   const stays = async (colour: number[], ms = 2_500) => {
     const end = Date.now() + ms;
-    while (Date.now() < end) { expect(await shown(page)).toEqual(colour); await page.waitForTimeout(150); }
+    while (Date.now() < end) { expect(await shown(view)).toEqual(colour); await page.waitForTimeout(150); }
   };
   // How many times the image changes in the given time.
   const changes = async (ms: number) => {
@@ -68,7 +70,7 @@ test('Cycle を入れると、表示しきれない契約をページとして C
     let last = '';
     let n = 0;
     while (Date.now() < end) {
-      const now = await imageSrc(page);
+      const now = await imageSrc(view);
       if (last && now !== last) n++;
       last = now;
       await page.waitForTimeout(100);
@@ -87,28 +89,28 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       await expect(page.getByText('Saved.')).toBeVisible();
       await expect.poll(() => hub.streams()).toBe(1);
       hub.send('snapshot', stats());
-      await page.getByRole('link', { name: 'Display' }).click();
+      view = await context.newPage();
+      await view.goto(server.url);
       await style().click();
-      await page.getByRole('option', { name: 'Bars' }).click();
+      await view.getByRole('option', { name: 'Bars' }).click();
       await expect.poll(() => file().limitStyle).toBe('Bars');
-      await expect.poll(() => shown(page)).toEqual(danger);
+      await expect.poll(() => shown(view)).toEqual(danger);
     });
     await test.step('手順1', async () => {
-      // Cycle and Cycle time sit right of the style choice on its row, against the right end of the card,
-      // in the switch design of the Usage Limits contracts. Cycle is off and the time is 10 seconds.
-      const select = (await style().boundingBox())!;
+      // Cycle and Cycle time sit in one row of the Display card on the Settings page, the switch left of
+      // the time, which is right-aligned. The switch has the design of the Usage Limits contracts.
+      // The window of `page` reads the saved style again, as the one window of the app always has it.
+      await page.reload();
+      await page.getByRole('link', { name: 'Settings' }).click();
       const sw = (await cycle().boundingBox())!;
       const input = (await time().boundingBox())!;
-      expect(sw.x).toBeGreaterThan(select.x + select.width);
       expect(input.x).toBeGreaterThan(sw.x + sw.width);
-      expect(Math.abs(sw.y + sw.height / 2 - (select.y + select.height / 2))).toBeLessThan(8);
-      expect(Math.abs(input.y + input.height / 2 - (select.y + select.height / 2))).toBeLessThan(8);
-      const card = (await page.getByRole('heading', { name: 'Style' }).locator('xpath=ancestor::div[contains(@class,"Card")][1]').boundingBox())!;
-      expect(card.x + card.width - (input.x + input.width)).toBeLessThan(40);
+      expect(Math.abs(sw.y + sw.height / 2 - (input.y + input.height / 2))).toBeLessThan(8);
+      await expect(page.getByRole('heading', { name: 'Display', exact: true })).toBeVisible();
       expect(await time().evaluate(e => getComputedStyle(e).textAlign)).toBe('right');
       await expect(cycle()).toHaveAttribute('aria-checked', 'false');
       await expect(time()).toHaveValue('10 s');
-      const contractSwitch = page.getByRole('checkbox', { name: 'c0 Pro', exact: true });
+      const contractSwitch = view.getByRole('checkbox', { name: 'c0 Pro', exact: true });
       const design = (el: Locator) => el.evaluate(e => { const s = getComputedStyle(e); return [s.width, s.height, s.borderRadius]; });
       expect(await design(cycle())).toEqual(await design(contractSwitch));
       const background = (el: Locator) => el.evaluate(e => getComputedStyle(e).backgroundColor);
@@ -120,6 +122,9 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       await expect(cycle()).toHaveAttribute('aria-checked', 'false');
       await expect.poll(() => file().cycle ?? false).toBe(false);
       await stays(danger, 1_500);
+      // The Display page no longer has them.
+      await expect(view.getByRole('switch', { name: 'Cycle' })).toHaveCount(0);
+      await expect(view.getByRole('textbox', { name: 'Cycle time' })).toHaveCount(0);
     });
     await test.step('手順2', async () => {
       // Turning it on saves at once, with no Save button, and starts at the first page.
@@ -130,32 +135,32 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       expect(file().limitStyle).toBe('Bars');
       expect(file().source).toBe('Hub');
       expect(file().connection).toBeTruthy();
-      await expect.poll(() => shown(page)).toEqual(danger);
+      await expect.poll(() => shown(view)).toEqual(danger);
     });
     await test.step('手順3', async () => {
       // With 10 seconds the server waits 1 second: the second page comes, and the first again after it.
-      await expect.poll(() => shown(page), { timeout: 10_000 }).toEqual(normal);
-      await expect.poll(() => shown(page), { timeout: 10_000 }).toEqual(danger);
-      await expect.poll(() => shown(page), { timeout: 10_000 }).toEqual(normal);
+      await expect.poll(() => shown(view), { timeout: 10_000 }).toEqual(normal);
+      await expect.poll(() => shown(view), { timeout: 10_000 }).toEqual(danger);
+      await expect.poll(() => shown(view), { timeout: 10_000 }).toEqual(normal);
       // Tokens do not move: the colour at a point of Today's tokens is the same on both pages.
-      const left = await colourAt(page, [60, 90]);
-      await expect.poll(() => shown(page), { timeout: 10_000 }).toEqual(danger);
-      expect(await colourAt(page, [60, 90])).toEqual(left);
+      const left = await colourAt(view, [60, 90]);
+      await expect.poll(() => shown(view), { timeout: 10_000 }).toEqual(danger);
+      expect(await colourAt(view, [60, 90])).toEqual(left);
     });
     await test.step('手順4', async () => {
       // A page stays for 10 seconds (100 seconds of the saved time). A new usage keeps the page number.
       // Fewer pages bring the first page, which stays when everything fits on it.
       await setTime('100');
       await expect.poll(() => file().cycleSeconds).toBe(100);
-      await expect.poll(() => shown(page), { timeout: 15_000 }).toEqual(normal);
+      await expect.poll(() => shown(view), { timeout: 15_000 }).toEqual(normal);
       hub.send('stats', stats());
       await page.waitForTimeout(1_000);
-      expect(await shown(page)).toEqual(normal);
+      expect(await shown(view)).toEqual(normal);
       hub.send('stats', stats(3));
-      await expect.poll(() => shown(page)).toEqual(danger);
+      await expect.poll(() => shown(view)).toEqual(danger);
       hub.send('stats', stats());
       await page.waitForTimeout(500);
-      expect(await shown(page)).toEqual(danger);
+      expect(await shown(view)).toEqual(danger);
     });
     await test.step('手順5', async () => {
       // The entered time applies at once: 5 seconds make the server wait half a second. A value out of
@@ -177,7 +182,7 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       await expect(cycle()).toHaveAttribute('aria-checked', 'false');
       await expect.poll(() => file().cycle ?? false).toBe(false);
       expect(file().cycleSeconds).toBe(5);
-      await expect.poll(() => shown(page)).toEqual(danger);
+      await expect.poll(() => shown(view)).toEqual(danger);
       await stays(danger);
     });
     await test.step('手順7', async () => {
@@ -189,18 +194,22 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       server = await startServer(dataDir, 34140, shortIntervals);
       await expect.poll(() => hub.streams()).toBe(1);
       hub.send('snapshot', stats());
+      await view.close();
       page = await context.newPage();
+      view = await context.newPage();
+      await view.goto(server.url);
       await page.goto(server.url);
+      await page.getByRole('link', { name: 'Settings' }).click();
       await expect(cycle()).toHaveAttribute('aria-checked', 'true');
       await expect(time()).toHaveValue('5 s');
-      await expect.poll(() => shown(page), { timeout: 30_000 }).toEqual(normal);
-      await expect.poll(() => shown(page), { timeout: 30_000 }).toEqual(danger);
+      await expect.poll(() => shown(view), { timeout: 30_000 }).toEqual(normal);
+      await expect.poll(() => shown(view), { timeout: 30_000 }).toEqual(danger);
     });
     await test.step('受け入れ条件', async () => {
       // Gauges cycles too. With everything on one page nothing changes though Cycle is on, and the
       // other saved values stay as they were.
       await style().click();
-      await page.getByRole('option', { name: 'Gauges' }).click();
+      await view.getByRole('option', { name: 'Gauges' }).click();
       await expect.poll(() => file().limitStyle).toBe('Gauges');
       expect(await changes(4_000)).toBeGreaterThanOrEqual(3);
       hub.send('stats', stats(3));
@@ -212,6 +221,7 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       expect(file().cycleSeconds).toBe(5);
     });
   } finally {
+    await view.close().catch(() => undefined);
     await page.close().catch(() => undefined);
     await server.stop();
     await hub.close();

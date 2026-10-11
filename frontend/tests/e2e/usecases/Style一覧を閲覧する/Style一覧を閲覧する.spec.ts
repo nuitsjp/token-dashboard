@@ -120,7 +120,7 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       expect(saved.limitStyle ?? 'Gauges').toBe('Gauges');
     });
     await test.step('手順1', async () => {
-      await expect(page.getByRole('navigation', { name: 'Menu' }).getByRole('link')).toHaveText(['Display', 'Styles', 'Connection']);
+      await expect(page.getByRole('navigation', { name: 'Menu' }).getByRole('link')).toHaveText(['Display', 'Styles', 'Connection', 'Settings']);
       await page.getByRole('link', { name: 'Styles' }).click();
       await expect(page.getByRole('heading', { name: 'Styles' })).toBeVisible();
       const heading = await page.getByRole('heading', { name: 'Styles' }).boundingBox();
