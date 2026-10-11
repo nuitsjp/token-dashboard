@@ -22,6 +22,9 @@ type FrameRequest struct {
 	ID    uint64    `json:"id"`
 	Theme string    `json:"theme"`
 	Data  ThemeData `json:"data"`
+	// ShiftX and ShiftY move the image sent to the TURZX (not the PNG for the preview) by that many pixels.
+	ShiftX int `json:"shiftX"`
+	ShiftY int `json:"shiftY"`
 }
 
 // Frame contains two encodings of the same Canvas drawing.
@@ -60,7 +63,7 @@ func (r *CanvasRenderer) Render(ctx context.Context, stats *usage.Stats, now tim
 	s.mu.Lock()
 	s.nextFrame++
 	pending := &pendingFrame{
-		request: FrameRequest{ID: s.nextFrame, Theme: strings.ToLower(string(style)), Data: themeData(stats, now, source, page)},
+		request: FrameRequest{ID: s.nextFrame, Theme: strings.ToLower(string(style)), Data: themeData(stats, now, source, page), ShiftX: s.shiftX, ShiftY: s.shiftY},
 		result:  make(chan frameResult, 1),
 	}
 	s.pending = pending

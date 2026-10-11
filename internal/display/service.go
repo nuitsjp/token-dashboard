@@ -25,11 +25,33 @@ type Service struct {
 	// Cycle returns whether the contracts that do not fit the first page are shown in turn, and how long
 	// each page stays.
 	Cycle func() (on bool, every time.Duration)
+	// ShiftEvery is how long the image for the TURZX stays at one offset; zero means 3 minutes.
+	ShiftEvery time.Duration
 
 	mu        sync.Mutex
 	preview   string
 	nextFrame uint64
 	pending   *pendingFrame
+	shiftX    int
+	shiftY    int
+}
+
+// shiftSteps are the offsets, in pixels, that the image for the TURZX takes in turn so that no pixel
+// stays lit for long.
+var shiftSteps = [...][2]int{{0, 0}, {4, 0}, {4, 4}, {0, 4}, {-4, 4}, {-4, 0}, {-4, -4}, {0, -4}}
+
+func (s *Service) shiftEvery() time.Duration {
+	if s.ShiftEvery <= 0 {
+		return 3 * time.Minute
+	}
+	return s.ShiftEvery
+}
+
+// setShift is the offset of the image for the TURZX; Render reads it when it asks for a frame.
+func (s *Service) setShift(step int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shiftX, s.shiftY = shiftSteps[step][0], shiftSteps[step][1]
 }
 
 // hiddenSet is the saved hidden windows as a set.
@@ -90,8 +112,11 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 	cycle, every := s.cycleSetting()
 	turn := time.NewTicker(every)
 	defer turn.Stop()
-	page := 0
+	shifter := time.NewTicker(s.shiftEvery())
+	defer shifter.Stop()
+	page, step := 0, 0
 	for {
+		s.setShift(step)
 		var d time.Duration
 		if cycle, d = s.cycleSetting(); d != every {
 			every = d
@@ -131,6 +156,9 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 			case <-state.Changed():
 				break wait
 			case <-ticker.C:
+				break wait
+			case <-shifter.C:
+				step = (step + 1) % len(shiftSteps)
 				break wait
 			case <-turn.C:
 				// Only a cycle over more than one page redraws on this beat.
