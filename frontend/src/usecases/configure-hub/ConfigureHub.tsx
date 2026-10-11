@@ -72,7 +72,7 @@ export function StyleSelect() {
       <Group gap="xs" wrap="nowrap"><Text size="sm">Cycle</Text>
         <SwitchButton role="switch" label="Cycle" checked={cycle.data ? 'true' : 'false'} disabled={cycle.data === undefined || setCycle.isPending}
           onClick={() => setCycle.mutate(!cycle.data)} /></Group>
-      <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls
+      <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls styles={{ input: { textAlign: 'right' } }}
         value={text} onChange={setText} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} />
     </Group>
   </Group>;
