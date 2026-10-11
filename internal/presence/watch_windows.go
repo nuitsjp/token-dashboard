@@ -4,7 +4,9 @@ package presence
 
 import (
 	"context"
+	"os"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 	"unsafe"
@@ -137,7 +139,9 @@ func Watch(ctx context.Context, c *Conditions, idleAfter func() int) {
 		return
 	}
 	// A hidden window that is never shown still gets the power and session notifications.
-	hwnd, _, _ := procCreateWindow.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(name)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	// The title carries the process ID so that a test can address the window of one process.
+	title, _ := syscall.UTF16PtrFromString(WindowTitle())
+	hwnd, _, _ := procCreateWindow.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(title)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if hwnd == 0 {
 		return
 	}
@@ -164,4 +168,14 @@ func idleSeconds() int {
 	}
 	now, _, _ := procGetTickCount.Call()
 	return int((uint32(now) - info.time) / 1000)
+}
+
+// WindowTitle is the title of the hidden window of the process with the given ID; it is the process's
+// own when pid is zero.
+func WindowTitle(pid ...int) string {
+	id := os.Getpid()
+	if len(pid) > 0 {
+		id = pid[0]
+	}
+	return "TokenMonitorTurzxPresence-" + strconv.Itoa(id)
 }

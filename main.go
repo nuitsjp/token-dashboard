@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -173,10 +174,13 @@ func run() error {
 		sink = output.Submit
 	}
 	settingsService.OnDisplaySaved = usageState.Touch
-	if !serverMode {
-		conditions := presence.New(func(away bool) { display.SetAway(displayService, away) })
-		go presence.Watch(ctx, conditions, func() int { return settings.AwayMinutesSetting(settingsService) * 60 })
+	// The server build is for tests, which cannot press keys, so it never counts idle time as away.
+	conditions := presence.New(func(away bool) { display.SetAway(displayService, away) })
+	idleAfter := func() int { return settings.AwayMinutesSetting(settingsService) * 60 }
+	if serverMode {
+		idleAfter = func() int { return math.MaxInt32 }
 	}
+	go presence.Watch(ctx, conditions, idleAfter)
 	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
