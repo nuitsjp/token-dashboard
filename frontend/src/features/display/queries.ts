@@ -26,3 +26,13 @@ export function useSetCycle() {
     onSuccess: (on) => { client.setQueryData(cycleKey, on); },
   });
 }
+
+export const cycleSecondsKey = ['display', 'cycleSeconds'] as const;
+export const getCycleSeconds = () => queryOptions({ queryKey: cycleSecondsKey, queryFn: () => Display.CycleSeconds() });
+export function useSetCycleSeconds() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (seconds: number) => Display.SetCycleSeconds(seconds),
+    onSuccess: (seconds) => { client.setQueryData(cycleSecondsKey, seconds); },
+  });
+}

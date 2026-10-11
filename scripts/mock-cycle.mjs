@@ -1,6 +1,7 @@
 // Mock for the "表示しきれない利用枠を順番に切り替えて表示する" scenario (stage 2 only; removed with the mock).
 // Starts a fake Hub with 12 contracts of two windows each and the server build on http://127.0.0.1:34130.
 // Gauges: 7 contracts per page, Bars: 8 per page, so both styles have two pages.
+// With the argument `hub`, only the fake Hub starts, for the desktop app (`node scripts/run.mjs dev`).
 // Connection: Data source Hub, URL http://127.0.0.1:34131, any token.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
@@ -28,9 +29,14 @@ const hub = createServer((req, res) => {
   req.on('close', () => streams.delete(res));
 }).listen(34131, '127.0.0.1');
 
+if (process.argv[2] === 'hub') {
+  console.log('Fake Hub on http://127.0.0.1:34131');
+  process.on('SIGINT', () => process.exit(0));
+} else {
 const exe = join('bin', process.platform === 'win32' ? 'token-monitor-turzx-server.exe' : 'token-monitor-turzx-server');
 const app = spawn(exe, [], { env: { ...process.env, WAILS_DATA_DIR: mkdtempSync(join(tmpdir(), 'turzx-cycle-mock-')), WAILS_SERVER_PORT: '34130' }, stdio: 'inherit' });
 const stop = () => { app.kill(); hub.close(); process.exit(0); };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 app.on('exit', () => process.exit(0));
+}

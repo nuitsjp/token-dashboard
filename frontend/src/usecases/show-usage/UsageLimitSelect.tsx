@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Text, Title } from '@mantine/core';
 import { getLimits, limitsKey, subscribePreview, useSetShown } from '../../features/display/queries';
+import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import styles from './UsageLimitSelect.module.css';
 
@@ -30,8 +31,7 @@ export function UsageLimitSelect() {
           return <div key={windows[0].key} className={styles.card} data-state={state}>
             <div className={styles.head}>
               <div className={styles.title}><Text fw={600} size="sm">{contract.provider}</Text><Text size="xs" c="dimmed">{contract.plan}</Text></div>
-              <button type="button" role="checkbox" aria-label={label} className={styles.switch}
-                aria-checked={state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'}
+              <SwitchButton role="checkbox" label={label} checked={state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'}
                 onClick={() => setShown.mutate({ keys: windows.map(w => w.key), shown: state !== 'all' })} />
             </div>
             <div className={styles.chips}>

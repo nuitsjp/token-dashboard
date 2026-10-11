@@ -179,7 +179,7 @@ func TestDisplayRunRecoversAfterCanvasTimeout(t *testing.T) {
 			updated := make(chan struct{}, 1)
 			done := make(chan struct{})
 			go func() {
-				Run(ctx, s, r, state, redraw, time.Hour, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
+				Run(ctx, s, r, state, redraw, func() Style { return Gauges }, func(jpeg []byte) { output <- jpeg }, func(string, any) { updated <- struct{}{} }, s.Logger)
 				close(done)
 			}()
 			t.Cleanup(func() {

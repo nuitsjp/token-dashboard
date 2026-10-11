@@ -3,6 +3,7 @@ package display
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -22,6 +23,8 @@ type Service struct {
 	Hidden func() ([]string, error)
 	Show   func(keys []string, shown bool) error
 	Logger *slog.Logger
+	// CycleEvery is how long each page stays while cycling, until SetCycleSeconds changes it.
+	CycleEvery time.Duration
 
 	mu        sync.Mutex
 	cycle     bool
@@ -63,6 +66,19 @@ func (s *Service) SetShown(keys []string, shown bool) (list []LimitContract, err
 	return s.Limits()
 }
 
+func (s *Service) cycleEvery() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cycleEveryLocked()
+}
+
+func (s *Service) cycleEveryLocked() time.Duration {
+	if s.CycleEvery <= 0 {
+		return 10 * time.Second
+	}
+	return s.CycleEvery
+}
+
 // Cycle reports whether the contracts that do not fit the first page are shown in turn.
 func (s *Service) Cycle() bool {
 	s.mu.Lock()
@@ -79,6 +95,32 @@ func (s *Service) SetCycle(on bool) bool {
 	return on
 }
 
+// Bounds of the time each page stays, in seconds.
+const (
+	minCycleSeconds = 5
+	maxCycleSeconds = 3600
+)
+
+// CycleSeconds is how long each page stays while cycling.
+func (s *Service) CycleSeconds() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return int(s.cycleEveryLocked() / time.Second)
+}
+
+// SetCycleSeconds changes how long each page stays. A value out of bounds is refused.
+func (s *Service) SetCycleSeconds(seconds int) (n int, err error) {
+	defer func() { err = fault.Boundary(s.Logger, "display.setCycleSeconds", err) }()
+	if seconds < minCycleSeconds || seconds > maxCycleSeconds {
+		return 0, fmt.Errorf("cycle time must be %d to %d seconds", minCycleSeconds, maxCycleSeconds)
+	}
+	s.mu.Lock()
+	s.CycleEvery = time.Duration(seconds) * time.Second
+	s.mu.Unlock()
+	s.State.Touch()
+	return seconds, nil
+}
+
 // Preview returns the latest image as a PNG data URL, or "" before the first image.
 func (s *Service) Preview() string {
 	s.mu.Lock()
@@ -89,13 +131,18 @@ func (s *Service) Preview() string {
 // Run redraws when the state changes and at least every redraw (a minute in the app) so the time
 // until reset stays current. Each image goes to the preview in s and to output. It is a function,
 // not a method, so Wails does not bind it.
-func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage.State, redraw, cycleEvery time.Duration, style func() Style, output func([]byte), emit func(string, any), logger *slog.Logger) {
+func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage.State, redraw time.Duration, style func() Style, output func([]byte), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
-	turn := time.NewTicker(cycleEvery)
+	every := s.cycleEvery()
+	turn := time.NewTicker(every)
 	defer turn.Stop()
 	page := 0
 	for {
+		if d := s.cycleEvery(); d != every {
+			every = d
+			turn.Reset(d)
+		}
 		stats, source := state.Snapshot()
 		// A selection that cannot be read draws every window, as style does for Gauges.
 		hidden, err := s.hiddenSet()

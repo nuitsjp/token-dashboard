@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Badge, Button, Card, Group, PasswordInput, Select, Stack, Switch, Text, TextInput, Title } from '@mantine/core';
-import { getCycle, useSetCycle } from '../../features/display/queries';
+import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { getCycle, getCycleSeconds, useSetCycle, useSetCycleSeconds } from '../../features/display/queries';
+import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { automatic, useSettingsDraft } from './SettingsDraft';
 import styles from './ConfigureHub.module.css';
@@ -51,17 +53,28 @@ export function ConnectionSettings() {
   </Card>;
 }
 
-// The style choice and the cycle switch sit right of the Style title. Both apply at once.
+// The style choice sits right of the Style title; the cycle switch and the time each page stays are
+// at the right end. Every choice applies at once.
 export function StyleSelect() {
   const draft = useSettingsDraft();
   const cycle = useQuery(getCycle());
+  const seconds = useQuery(getCycleSeconds());
   const setCycle = useSetCycle();
+  const setSeconds = useSetCycleSeconds();
+  const [text, setText] = useState<number | string>('');
+  useEffect(() => { if (seconds.data !== undefined) setText(seconds.data); }, [seconds.data]);
   if (!draft) return null;
-  return <Group gap="md" wrap="nowrap">
+  const commit = () => { if (typeof text === 'number' && text !== seconds.data) setSeconds.mutate(text, { onError: () => setText(seconds.data ?? '') }); else setText(seconds.data ?? ''); };
+  return <Group gap="md" wrap="nowrap" justify="space-between" style={{ flex: 1 }}>
     <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
       onChange={value => { if (value) draft.setStyle(value); }} />
-    <Switch label="Cycle" aria-label="Cycle" checked={cycle.data ?? false} disabled={cycle.data === undefined || setCycle.isPending}
-      onChange={e => setCycle.mutate(e.currentTarget.checked)} />
+    <Group gap="md" wrap="nowrap">
+      <Group gap="xs" wrap="nowrap"><Text size="sm">Cycle</Text>
+        <SwitchButton role="switch" label="Cycle" checked={cycle.data ? 'true' : 'false'} disabled={cycle.data === undefined || setCycle.isPending}
+          onClick={() => setCycle.mutate(!cycle.data)} /></Group>
+      <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls
+        value={text} onChange={setText} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} />
+    </Group>
   </Group>;
 }
 
