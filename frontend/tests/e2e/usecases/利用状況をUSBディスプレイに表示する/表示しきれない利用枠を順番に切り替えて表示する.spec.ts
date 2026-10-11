@@ -97,7 +97,7 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       await expect.poll(() => shown(view)).toEqual(danger);
     });
     await test.step('手順1', async () => {
-      // Cycle and Cycle time sit in one row of the Display card on the Settings page, the switch left of
+      // Cycle and Cycle time sit in one row of the card on the Settings page, the switch left of
       // the time, which is right-aligned. The switch has the design of the Usage Limits contracts.
       // The window of `page` reads the saved style again, as the one window of the app always has it.
       await page.reload();
@@ -106,7 +106,6 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       const input = (await time().boundingBox())!;
       expect(input.x).toBeGreaterThan(sw.x + sw.width);
       expect(Math.abs(sw.y + sw.height / 2 - (input.y + input.height / 2))).toBeLessThan(8);
-      await expect(page.getByRole('heading', { name: 'Display', exact: true })).toBeVisible();
       expect(await time().evaluate(e => getComputedStyle(e).textAlign)).toBe('right');
       await expect(cycle()).toHaveAttribute('aria-checked', 'false');
       await expect(time()).toHaveValue('10 s');

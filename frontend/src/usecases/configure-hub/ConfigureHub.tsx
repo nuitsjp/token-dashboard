@@ -59,7 +59,7 @@ export function StyleSelect() {
     onChange={value => { if (value) draft.setStyle(value); }} />;
 }
 
-// The Settings page: the cycling of the pages, and the time without input that counts as away. Every
+// The Settings page: the cycling of the pages, and the time without input that counts as away, in one card. Every
 // change applies and saves at once.
 export function EditSettings() {
   const draft = useSettingsDraft();
@@ -88,7 +88,6 @@ export function EditSettings() {
   };
   return <Stack gap="md">
     <Card withBorder padding="md">
-      <Title order={4} mb="sm">Display</Title>
       <Row title="Cycle" hint="Show the contracts that do not fit in turn">
         <Group gap="md" wrap="nowrap">
           <SwitchButton role="switch" label="Cycle" checked={draft.cycle ? 'true' : 'false'} onClick={() => draft.setCycle(!draft.cycle)} />
@@ -97,9 +96,6 @@ export function EditSettings() {
             value={cycleText} onChange={setCycleText} onBlur={commitCycle} onKeyDown={e => { if (e.key === 'Enter') commitCycle(); }} />
         </Group>
       </Row>
-    </Card>
-    <Card withBorder padding="md">
-      <Title order={4} mb="sm">Away</Title>
       <Row title="Away time" hint="No input for this long switches the TURZX off">
         <NumberInput w={110} aria-label="Away time" suffix=" min" min={1} max={240} step={1} allowDecimal={false} clampBehavior="strict" hideControls
           styles={{ input: { textAlign: 'right' } }} error={draft.fields.awayMinutes}
