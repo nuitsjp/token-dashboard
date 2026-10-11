@@ -175,7 +175,7 @@ func run() error {
 	settingsService.OnDisplaySaved = usageState.Touch
 	if !serverMode {
 		conditions := presence.New(func(away bool) { display.SetAway(displayService, away) })
-		go presence.Watch(ctx, conditions, func() int { return displayService.AwayMinutes() * 60 })
+		go presence.Watch(ctx, conditions, func() int { return settings.AwayMinutesSetting(settingsService) * 60 })
 	}
 	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)

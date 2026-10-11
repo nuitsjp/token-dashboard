@@ -2,19 +2,9 @@ package display
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/jpeg"
 	"sync"
-
-	"token-monitor-turzx/internal/fault"
-)
-
-// Away minutes the user may choose, and the default.
-const (
-	MinAwayMinutes     = 1
-	MaxAwayMinutes     = 240
-	DefaultAwayMinutes = 10
 )
 
 var (
@@ -55,26 +45,4 @@ func (s *Service) awayState() (bool, <-chan struct{}) {
 		s.awayCh = make(chan struct{}, 1)
 	}
 	return s.away, s.awayCh
-}
-
-// AwayMinutes is how long without input counts as away.
-func (s *Service) AwayMinutes() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.awayMinutes == 0 {
-		return DefaultAwayMinutes
-	}
-	return s.awayMinutes
-}
-
-// SetAwayMinutes changes the time without input that counts as away; a value out of range is refused.
-func (s *Service) SetAwayMinutes(minutes int) (saved int, err error) {
-	defer func() { err = fault.Boundary(s.Logger, "display.setAwayMinutes", err) }()
-	if minutes < MinAwayMinutes || minutes > MaxAwayMinutes {
-		return s.AwayMinutes(), fmt.Errorf("enter %d to %d minutes", MinAwayMinutes, MaxAwayMinutes)
-	}
-	s.mu.Lock()
-	s.awayMinutes = minutes
-	s.mu.Unlock()
-	return minutes, nil
 }

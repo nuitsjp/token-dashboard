@@ -2,10 +2,10 @@
 package settings
 
 import (
-	"fmt"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"maps"
@@ -41,7 +41,16 @@ type View struct {
 	// Cycle shows the contracts that do not fit the first page in turn, each page for CycleSeconds.
 	Cycle        bool `json:"cycle"`
 	CycleSeconds int  `json:"cycleSeconds"`
+	// AwayMinutes is how long without input counts as away from the PC.
+	AwayMinutes int `json:"awayMinutes"`
 }
+
+// Bounds and default of the time without input that counts as away, in minutes.
+const (
+	MinAwayMinutes     = 1
+	MaxAwayMinutes     = 240
+	DefaultAwayMinutes = 10
+)
 
 // Bounds and default of the time each page stays, in seconds.
 const (
@@ -61,6 +70,8 @@ type SaveRequest struct {
 	// A nil Cycle and a zero CycleSeconds keep the current values.
 	Cycle        *bool `json:"cycle"`
 	CycleSeconds int   `json:"cycleSeconds"`
+	// A zero AwayMinutes keeps the current value.
+	AwayMinutes int `json:"awayMinutes"`
 }
 
 // file is the on-disk format described in docs/design/data.md.
@@ -76,6 +87,8 @@ type file struct {
 	// Cycle absent means false; CycleSeconds absent means DefaultCycleSeconds.
 	Cycle        bool `json:"cycle,omitempty"`
 	CycleSeconds int  `json:"cycleSeconds,omitempty"`
+	// AwayMinutes absent means DefaultAwayMinutes.
+	AwayMinutes int `json:"awayMinutes,omitempty"`
 }
 
 type connection struct {
@@ -93,6 +106,11 @@ type Service struct {
 	OnSaved func()
 	// OnDisplaySaved tells the display that the style or the cycling changed. It must not block.
 	OnDisplaySaved func()
+
+	// awayMinutes is the saved value once it is known, so the presence watcher need not read the file
+	// every second.
+	awayKnown   bool
+	awayMinutes int
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -128,6 +146,15 @@ func cycleSecondsOf(saved file) int {
 		return DefaultCycleSeconds
 	}
 	return saved.CycleSeconds
+}
+
+// awayMinutesOf is the saved time without input that counts as away; a missing or out-of-range value
+// means the default.
+func awayMinutesOf(saved file) int {
+	if saved.AwayMinutes < MinAwayMinutes || saved.AwayMinutes > MaxAwayMinutes {
+		return DefaultAwayMinutes
+	}
+	return saved.AwayMinutes
 }
 
 func (s *Service) Save(req SaveRequest) (view View, err error) {
@@ -170,8 +197,14 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if req.CycleSeconds != 0 && (req.CycleSeconds < MinCycleSeconds || req.CycleSeconds > MaxCycleSeconds) {
 		fields["cycleSeconds"] = fmt.Sprintf("Enter %d to %d seconds.", MinCycleSeconds, MaxCycleSeconds)
 	}
+	if req.AwayMinutes != 0 && (req.AwayMinutes < MinAwayMinutes || req.AwayMinutes > MaxAwayMinutes) {
+		fields["awayMinutes"] = fmt.Sprintf("Enter %d to %d minutes.", MinAwayMinutes, MaxAwayMinutes)
+	}
 	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits,
-		Cycle: saved.Cycle, CycleSeconds: saved.CycleSeconds}
+		Cycle: saved.Cycle, CycleSeconds: saved.CycleSeconds, AwayMinutes: saved.AwayMinutes}
+	if req.AwayMinutes != 0 {
+		next.AwayMinutes = req.AwayMinutes
+	}
 	if req.Cycle != nil {
 		next.Cycle = *req.Cycle
 	}
@@ -208,6 +241,7 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if err := s.write(next); err != nil {
 		return View{}, err
 	}
+	s.awayKnown, s.awayMinutes = true, awayMinutesOf(next)
 	s.logger.Info("settings_saved")
 	// The source is read again only when the source or the connection changed. A new display or style
 	// must not interrupt reading, which would blank the image until the next usage arrives.
@@ -296,7 +330,7 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 	if saved.DisplayID != "" && !slices.ContainsFunc(devices, func(d turzx.Device) bool { return d.ID == saved.DisplayID }) {
 		displays = append(displays, Display{DeviceID: saved.DisplayID, Name: saved.DisplayName})
 	}
-	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved), Cycle: saved.Cycle, CycleSeconds: cycleSecondsOf(saved)}
+	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved), Cycle: saved.Cycle, CycleSeconds: cycleSecondsOf(saved), AwayMinutes: awayMinutesOf(saved)}
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -331,6 +365,21 @@ func CycleSetting(s *Service) (bool, int) {
 		return false, DefaultCycleSeconds
 	}
 	return saved.Cycle, cycleSecondsOf(saved)
+}
+
+// AwayMinutesSetting returns how many minutes without input count as away, the default when the file
+// cannot be read. It is a function, not a method, so Wails does not bind it.
+func AwayMinutesSetting(s *Service) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.awayKnown {
+		saved, _, err := s.read()
+		if err != nil {
+			return DefaultAwayMinutes
+		}
+		s.awayKnown, s.awayMinutes = true, awayMinutesOf(saved)
+	}
+	return s.awayMinutes
 }
 
 // HiddenLimits returns the saved keys of the windows that are not drawn. It is a function, not a

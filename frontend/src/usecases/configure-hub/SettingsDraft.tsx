@@ -7,7 +7,7 @@ import { publicError } from '../../shared/errors';
 import { useDraftDirty } from '../../shared/ExitContext';
 
 type Scope = 'connection' | 'display';
-type DisplayChange = { display?: string; style?: string; cycle?: boolean; cycleSeconds?: number };
+type DisplayChange = { display?: string; style?: string; cycle?: boolean; cycleSeconds?: number; awayMinutes?: number };
 export const automatic = '__automatic__';
 
 function useDraft(saved: View) {
@@ -26,7 +26,7 @@ function useDraft(saved: View) {
     setDone(false);
     setFailed(null);
     try {
-      const view = await save.mutateAsync({ source, url, token, displayID: saved.displayID, limitStyle: saved.limitStyle, cycle: saved.cycle, cycleSeconds: saved.cycleSeconds });
+      const view = await save.mutateAsync({ source, url, token, displayID: saved.displayID, limitStyle: saved.limitStyle, cycle: saved.cycle, cycleSeconds: saved.cycleSeconds, awayMinutes: saved.awayMinutes });
       setSource(view.source || 'Local');
       setURL(view.url);
       setToken('');
@@ -43,6 +43,7 @@ function useDraft(saved: View) {
         displayID: change.display === undefined ? saved.displayID : change.display === automatic ? '' : change.display,
         limitStyle: change.style ?? saved.limitStyle,
         cycle: change.cycle ?? saved.cycle, cycleSeconds: change.cycleSeconds ?? saved.cycleSeconds,
+        awayMinutes: change.awayMinutes ?? saved.awayMinutes,
       });
     } catch { setFailed('display'); } finally { setPending({}); }
   }
@@ -52,11 +53,13 @@ function useDraft(saved: View) {
     style: pending.style ?? (saved.limitStyle || 'Gauges'),
     cycle: pending.cycle ?? saved.cycle,
     cycleSeconds: saved.cycleSeconds,
+    awayMinutes: saved.awayMinutes,
     setSource: edit(setSource), setURL: edit(setURL), setToken: edit(setToken),
     setDisplay: (display: string) => void applyDisplay({ display }),
     setStyle: (style: string) => void applyDisplay({ style }),
     setCycle: (cycle: boolean) => void applyDisplay({ cycle }),
     setCycleSeconds: (cycleSeconds: number) => void applyDisplay({ cycleSeconds }),
+    setAwayMinutes: (awayMinutes: number) => void applyDisplay({ awayMinutes }),
     saving: save.isPending,
     errorFor: (scope: Scope) => failed === scope ? save.error : null,
     fields: save.error ? publicError(save.error).fieldErrors ?? {} : {},

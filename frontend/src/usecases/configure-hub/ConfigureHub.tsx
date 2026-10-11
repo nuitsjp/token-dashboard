@@ -4,7 +4,6 @@ import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, 
 import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { automatic, useSettingsDraft } from './SettingsDraft';
-import { useAwayMinutes, useSetAwayMinutes } from '../../features/display/queries';
 import styles from './ConfigureHub.module.css';
 
 function Row({ title, hint, children }: { title: ReactNode; hint?: string; children: ReactNode }) {
@@ -62,18 +61,17 @@ export function StyleSelect() {
   const setText = (value: number | string) => { entry.current = value; setTextState(value); };
   const seconds = draft?.cycleSeconds;
   useEffect(() => { if (seconds !== undefined) setText(seconds); }, [seconds]);
-  const away = useAwayMinutes();
-  const setAway = useSetAwayMinutes();
   const [awayText, setAwayText] = useState<number | string>('');
   const awayEntry = useRef<number | string>('');
   const changeAway = (value: number | string) => { awayEntry.current = value; setAwayText(value); };
-  useEffect(() => { if (away.data !== undefined) changeAway(away.data); }, [away.data]);
+  const minutes = draft?.awayMinutes;
+  useEffect(() => { if (minutes !== undefined) changeAway(minutes); }, [minutes]);
   if (!draft) return null;
   // An entry that is unchanged or out of range shows the saved minutes again.
   const commitAway = () => {
     const value = awayEntry.current;
-    if (typeof value === 'number' && value >= 1 && value <= 240 && value !== away.data) setAway.mutate(value);
-    else if (away.data !== undefined) changeAway(away.data);
+    if (typeof value === 'number' && value >= 1 && value <= 240 && value !== draft.awayMinutes) draft.setAwayMinutes(value);
+    else changeAway(draft.awayMinutes);
   };
   // An unchanged or invalid entry shows the saved value again; the server refuses a value out of range.
   const commit = () => {
@@ -95,7 +93,7 @@ export function StyleSelect() {
   <Group gap="xs" wrap="nowrap" justify="flex-end">
     <Text size="sm">Away time</Text>
     <NumberInput w={110} aria-label="Away time" suffix=" min" min={1} max={240} step={1} allowDecimal={false} clampBehavior="strict" hideControls
-      styles={{ input: { textAlign: 'right' } }} value={awayText} onChange={changeAway} onBlur={commitAway}
+      styles={{ input: { textAlign: 'right' } }} error={draft.fields.awayMinutes} value={awayText} onChange={changeAway} onBlur={commitAway}
       onKeyDown={e => { if (e.key === 'Enter') commitAway(); }} />
   </Group></Stack>;
 }

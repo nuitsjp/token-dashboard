@@ -35,9 +35,8 @@ type Service struct {
 	shiftX    int
 	shiftY    int
 	// away is whether the user is away, and awayCh wakes Run when it changes.
-	away        bool
-	awayCh      chan struct{}
-	awayMinutes int
+	away   bool
+	awayCh chan struct{}
 }
 
 // shiftSteps are the offsets, in pixels, that the image for the TURZX takes in turn so that no pixel

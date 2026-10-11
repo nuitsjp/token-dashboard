@@ -1,4 +1,4 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Events } from '@wailsio/runtime';
 import * as Display from '@bindings/token-monitor-turzx/internal/display/service';
 
@@ -13,16 +13,5 @@ export function useSetShown() {
   return useMutation({
     mutationFn: ({ keys, shown }: { keys: string[]; shown: boolean }) => Display.SetShown(keys, shown),
     onSuccess: (contracts) => { client.setQueryData(limitsKey, contracts); },
-  });
-}
-
-// How many minutes without input count as away; the Display screen applies a change at once.
-export const awayKey = ['display', 'away'] as const;
-export const useAwayMinutes = () => useQuery({ queryKey: awayKey, queryFn: () => Display.AwayMinutes() });
-export function useSetAwayMinutes() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (minutes: number) => Display.SetAwayMinutes(minutes),
-    onSuccess: minutes => { client.setQueryData(awayKey, minutes); },
   });
 }
