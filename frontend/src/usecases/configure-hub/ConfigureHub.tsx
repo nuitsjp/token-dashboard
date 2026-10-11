@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
-import { getCycle, getCycleSeconds, useSetCycle, useSetCycleSeconds } from '../../features/display/queries';
 import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import { automatic, useSettingsDraft } from './SettingsDraft';
@@ -54,25 +52,26 @@ export function ConnectionSettings() {
 }
 
 // The style choice sits right of the Style title; the cycle switch and the time each page stays are
-// at the right end. Every choice applies at once.
+// at the right end. Every choice applies and saves at once.
 export function StyleSelect() {
   const draft = useSettingsDraft();
-  const cycle = useQuery(getCycle());
-  const seconds = useQuery(getCycleSeconds());
-  const setCycle = useSetCycle();
-  const setSeconds = useSetCycleSeconds();
   const [text, setText] = useState<number | string>('');
-  useEffect(() => { if (seconds.data !== undefined) setText(seconds.data); }, [seconds.data]);
+  const seconds = draft?.cycleSeconds;
+  useEffect(() => { if (seconds !== undefined) setText(seconds); }, [seconds]);
   if (!draft) return null;
-  const commit = () => { if (typeof text === 'number' && text !== seconds.data) setSeconds.mutate(text, { onError: () => setText(seconds.data ?? '') }); else setText(seconds.data ?? ''); };
+  // An unchanged or invalid entry shows the saved value again; the server refuses a value out of range.
+  const commit = () => {
+    if (typeof text === 'number' && text !== draft.cycleSeconds) draft.setCycleSeconds(text);
+    else setText(draft.cycleSeconds);
+  };
   return <Group gap="md" wrap="nowrap" justify="space-between" style={{ flex: 1 }}>
     <Select w={160} aria-label="Display style" data={['Gauges', 'Bars']} value={draft.style} allowDeselect={false} error={draft.fields.limitStyle}
       onChange={value => { if (value) draft.setStyle(value); }} />
     <Group gap="md" wrap="nowrap">
       <Group gap="xs" wrap="nowrap"><Text size="sm">Cycle</Text>
-        <SwitchButton role="switch" label="Cycle" checked={cycle.data ? 'true' : 'false'} disabled={cycle.data === undefined || setCycle.isPending}
-          onClick={() => setCycle.mutate(!cycle.data)} /></Group>
-      <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls styles={{ input: { textAlign: 'right' } }}
+        <SwitchButton role="switch" label="Cycle" checked={draft.cycle ? 'true' : 'false'} onClick={() => draft.setCycle(!draft.cycle)} /></Group>
+      <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls
+        styles={{ input: { textAlign: 'right' } }} error={draft.fields.cycleSeconds}
         value={text} onChange={setText} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} />
     </Group>
   </Group>;

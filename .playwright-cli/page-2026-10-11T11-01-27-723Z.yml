@@ -1,0 +1,31 @@
+- generic [ref=e3]:
+  - navigation "Menu" [ref=e4]:
+    - link "Display" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - img [ref=e7]
+      - generic [ref=e9]: Display
+    - link "Styles" [ref=e10] [cursor=pointer]:
+      - /url: /styles
+      - img [ref=e12]
+      - generic [ref=e14]: Styles
+    - link "Connection" [ref=e15] [cursor=pointer]:
+      - /url: /connection
+      - img [ref=e17]
+      - generic [ref=e19]: Connection
+    - paragraph [ref=e20]
+  - main [ref=e21]:
+    - generic [ref=e22]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - heading "Update" [level=4] [ref=e26]
+          - paragraph [ref=e27]: Version 0.1.6 is ready to install.
+        - button "Update and restart" [ref=e28] [cursor=pointer]:
+          - generic [ref=e30]: Update and restart
+      - generic [ref=e32]:
+        - heading "Display settings" [level=2] [ref=e34]
+        - generic [ref=e35]:
+          - heading "Style" [level=4] [ref=e37]
+          - paragraph [ref=e38]: No image yet.
+        - generic [ref=e39]:
+          - heading "Usage Limits" [level=4] [ref=e40]
+          - paragraph [ref=e41]: Waiting for usage.

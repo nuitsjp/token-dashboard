@@ -3,7 +3,6 @@ package display
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -23,11 +22,11 @@ type Service struct {
 	Hidden func() ([]string, error)
 	Show   func(keys []string, shown bool) error
 	Logger *slog.Logger
-	// CycleEvery is how long each page stays while cycling, until SetCycleSeconds changes it.
-	CycleEvery time.Duration
+	// Cycle returns whether the contracts that do not fit the first page are shown in turn, and how long
+	// each page stays.
+	Cycle func() (on bool, every time.Duration)
 
 	mu        sync.Mutex
-	cycle     bool
 	preview   string
 	nextFrame uint64
 	pending   *pendingFrame
@@ -66,59 +65,13 @@ func (s *Service) SetShown(keys []string, shown bool) (list []LimitContract, err
 	return s.Limits()
 }
 
-func (s *Service) cycleEvery() time.Duration {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cycleEveryLocked()
-}
-
-func (s *Service) cycleEveryLocked() time.Duration {
-	if s.CycleEvery <= 0 {
-		return 10 * time.Second
+// cycleSetting is the saved cycling; without one the pages do not cycle.
+func (s *Service) cycleSetting() (bool, time.Duration) {
+	if s.Cycle == nil {
+		return false, 10 * time.Second
 	}
-	return s.CycleEvery
-}
-
-// Cycle reports whether the contracts that do not fit the first page are shown in turn.
-func (s *Service) Cycle() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cycle
-}
-
-// SetCycle turns the cycling on or off and redraws at once.
-func (s *Service) SetCycle(on bool) bool {
-	s.mu.Lock()
-	s.cycle = on
-	s.mu.Unlock()
-	s.State.Touch()
-	return on
-}
-
-// Bounds of the time each page stays, in seconds.
-const (
-	minCycleSeconds = 5
-	maxCycleSeconds = 3600
-)
-
-// CycleSeconds is how long each page stays while cycling.
-func (s *Service) CycleSeconds() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return int(s.cycleEveryLocked() / time.Second)
-}
-
-// SetCycleSeconds changes how long each page stays. A value out of bounds is refused.
-func (s *Service) SetCycleSeconds(seconds int) (n int, err error) {
-	defer func() { err = fault.Boundary(s.Logger, "display.setCycleSeconds", err) }()
-	if seconds < minCycleSeconds || seconds > maxCycleSeconds {
-		return 0, fmt.Errorf("cycle time must be %d to %d seconds", minCycleSeconds, maxCycleSeconds)
-	}
-	s.mu.Lock()
-	s.CycleEvery = time.Duration(seconds) * time.Second
-	s.mu.Unlock()
-	s.State.Touch()
-	return seconds, nil
+	on, every := s.Cycle()
+	return on, every
 }
 
 // Preview returns the latest image as a PNG data URL, or "" before the first image.
@@ -134,12 +87,13 @@ func (s *Service) Preview() string {
 func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage.State, redraw time.Duration, style func() Style, output func([]byte), emit func(string, any), logger *slog.Logger) {
 	ticker := time.NewTicker(redraw)
 	defer ticker.Stop()
-	every := s.cycleEvery()
+	cycle, every := s.cycleSetting()
 	turn := time.NewTicker(every)
 	defer turn.Stop()
 	page := 0
 	for {
-		if d := s.cycleEvery(); d != every {
+		var d time.Duration
+		if cycle, d = s.cycleSetting(); d != every {
 			every = d
 			turn.Reset(d)
 		}
@@ -149,7 +103,7 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 		if err != nil {
 			logger.Warn("hidden_limits_unavailable", "cause", err)
 		}
-		if !s.Cycle() {
+		if !cycle {
 			page = 0
 		}
 		frame, err := renderer.Render(ctx, withoutHidden(stats, hidden), time.Now(), source, style(), page)
@@ -180,7 +134,7 @@ func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage
 				break wait
 			case <-turn.C:
 				// Only a cycle over more than one page redraws on this beat.
-				if s.Cycle() && pages > 1 {
+				if cycle && pages > 1 {
 					page = (page + 1) % pages
 					break wait
 				}

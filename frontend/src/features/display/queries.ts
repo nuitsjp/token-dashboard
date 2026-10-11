@@ -15,24 +15,3 @@ export function useSetShown() {
     onSuccess: (contracts) => { client.setQueryData(limitsKey, contracts); },
   });
 }
-
-// Mock: the cycle switch is held in memory by the app until it is saved with the settings.
-export const cycleKey = ['display', 'cycle'] as const;
-export const getCycle = () => queryOptions({ queryKey: cycleKey, queryFn: () => Display.Cycle() });
-export function useSetCycle() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (on: boolean) => Display.SetCycle(on),
-    onSuccess: (on) => { client.setQueryData(cycleKey, on); },
-  });
-}
-
-export const cycleSecondsKey = ['display', 'cycleSeconds'] as const;
-export const getCycleSeconds = () => queryOptions({ queryKey: cycleSecondsKey, queryFn: () => Display.CycleSeconds() });
-export function useSetCycleSeconds() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (seconds: number) => Display.SetCycleSeconds(seconds),
-    onSuccess: (seconds) => { client.setQueryData(cycleSecondsKey, seconds); },
-  });
-}

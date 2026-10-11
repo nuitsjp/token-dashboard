@@ -242,12 +242,58 @@ func TestLimitStyleDefaultsToGaugesAndIsSavedInTheFile(t *testing.T) {
 	}
 }
 
+func TestCycleDefaultsToOffTenSecondsAndIsSavedInTheFile(t *testing.T) {
+	devices := []turzx.Device{}
+	s, path := newService(t, &devices)
+	if on, seconds := CycleSetting(s); on || seconds != 10 {
+		t.Fatalf("default = %v, %d", on, seconds)
+	}
+	if view, err := s.Get(); err != nil || view.Cycle || view.CycleSeconds != 10 {
+		t.Fatalf("default view = %+v, %v", view, err)
+	}
+	on := true
+	var changed int
+	s.OnDisplaySaved = func() { changed++ }
+	if view, err := s.Save(SaveRequest{Source: "Local", Cycle: &on, CycleSeconds: 30}); err != nil || !view.Cycle || view.CycleSeconds != 30 {
+		t.Fatalf("saved view = %+v, %v", view, err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"cycle": true`) || !strings.Contains(string(data), `"cycleSeconds": 30`) {
+		t.Fatalf("settings file = %s", data)
+	}
+	// A request without the cycle values, and a save of other values, keep them.
+	if view, err := s.Save(SaveRequest{Source: "Local", LimitStyle: "Bars"}); err != nil || !view.Cycle || view.CycleSeconds != 30 {
+		t.Fatalf("kept view = %+v, %v", view, err)
+	}
+	// Turning it off keeps the seconds, and the same values do not tell the display again.
+	off := false
+	before := changed
+	if _, err := s.Save(SaveRequest{Source: "Local", Cycle: &off}); err != nil || changed != before+1 {
+		t.Fatalf("off: %v, notified %d times", err, changed-before)
+	}
+	if on, seconds := CycleSetting(s); on || seconds != 30 {
+		t.Fatalf("after off = %v, %d", on, seconds)
+	}
+	before = changed
+	if _, err := s.Save(SaveRequest{Source: "Local", Cycle: &off, CycleSeconds: 30}); err != nil || changed != before {
+		t.Fatalf("same values notified %d times, %v", changed-before, err)
+	}
+	for _, bad := range []int{4, 3601, -1} {
+		_, err := s.Save(SaveRequest{Source: "Local", CycleSeconds: bad})
+		if fieldErrors(t, err)["cycleSeconds"] == "" {
+			t.Fatalf("%d seconds were accepted", bad)
+		}
+	}
+	if _, seconds := CycleSetting(s); seconds != 30 {
+		t.Fatalf("seconds after rejected saves = %d", seconds)
+	}
+}
+
 func TestOnlyANewSourceOrConnectionRestartsReading(t *testing.T) {
 	devices := []turzx.Device{{ID: first, Name: "TURZX1.0 (633A6E01)"}}
 	s, _ := newService(t, &devices)
 	var sources, styles int
 	s.OnSaved = func() { sources++ }
-	s.OnStyleSaved = func() { styles++ }
+	s.OnDisplaySaved = func() { styles++ }
 	save := func(req SaveRequest) {
 		t.Helper()
 		if _, err := s.Save(req); err != nil {

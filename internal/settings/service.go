@@ -2,6 +2,7 @@
 package settings
 
 import (
+	"fmt"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -37,7 +38,17 @@ type View struct {
 	Displays  []Display `json:"displays"`
 	// LimitStyle is how Usage Limits are drawn: Gauges or Bars.
 	LimitStyle string `json:"limitStyle"`
+	// Cycle shows the contracts that do not fit the first page in turn, each page for CycleSeconds.
+	Cycle        bool `json:"cycle"`
+	CycleSeconds int  `json:"cycleSeconds"`
 }
+
+// Bounds and default of the time each page stays, in seconds.
+const (
+	MinCycleSeconds     = 5
+	MaxCycleSeconds     = 3600
+	DefaultCycleSeconds = 10
+)
 
 type SaveRequest struct {
 	Source string `json:"source"`
@@ -47,6 +58,9 @@ type SaveRequest struct {
 	DisplayID string `json:"displayID"`
 	// An empty LimitStyle keeps the current one.
 	LimitStyle string `json:"limitStyle"`
+	// A nil Cycle and a zero CycleSeconds keep the current values.
+	Cycle        *bool `json:"cycle"`
+	CycleSeconds int   `json:"cycleSeconds"`
 }
 
 // file is the on-disk format described in docs/design/data.md.
@@ -59,6 +73,9 @@ type file struct {
 	LimitStyle string `json:"limitStyle,omitempty"`
 	// HiddenLimits are the keys of the windows that are not drawn; absent means all are drawn.
 	HiddenLimits []string `json:"hiddenLimits,omitempty"`
+	// Cycle absent means false; CycleSeconds absent means DefaultCycleSeconds.
+	Cycle        bool `json:"cycle,omitempty"`
+	CycleSeconds int  `json:"cycleSeconds,omitempty"`
 }
 
 type connection struct {
@@ -74,8 +91,8 @@ type Service struct {
 	logger  *slog.Logger
 	// OnSaved hands the new settings to the processes that depend on them. It must not block.
 	OnSaved func()
-	// OnStyleSaved tells the display that the style changed. It must not block.
-	OnStyleSaved func()
+	// OnDisplaySaved tells the display that the style or the cycling changed. It must not block.
+	OnDisplaySaved func()
 }
 
 func New(path, appID string, list func() ([]turzx.Device, error), logger *slog.Logger) *Service {
@@ -103,6 +120,14 @@ func styleOf(saved file) string {
 		return "Bars"
 	}
 	return "Gauges"
+}
+
+// cycleSecondsOf is the saved time each page stays; a missing or out-of-range value means the default.
+func cycleSecondsOf(saved file) int {
+	if saved.CycleSeconds < MinCycleSeconds || saved.CycleSeconds > MaxCycleSeconds {
+		return DefaultCycleSeconds
+	}
+	return saved.CycleSeconds
 }
 
 func (s *Service) Save(req SaveRequest) (view View, err error) {
@@ -142,7 +167,17 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if req.LimitStyle != "" && req.LimitStyle != "Gauges" && req.LimitStyle != "Bars" {
 		fields["limitStyle"] = "Choose Gauges or Bars."
 	}
-	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits}
+	if req.CycleSeconds != 0 && (req.CycleSeconds < MinCycleSeconds || req.CycleSeconds > MaxCycleSeconds) {
+		fields["cycleSeconds"] = fmt.Sprintf("Enter %d to %d seconds.", MinCycleSeconds, MaxCycleSeconds)
+	}
+	next := file{Source: req.Source, Connection: saved.Connection, DisplayID: req.DisplayID, LimitStyle: saved.LimitStyle, HiddenLimits: saved.HiddenLimits,
+		Cycle: saved.Cycle, CycleSeconds: saved.CycleSeconds}
+	if req.Cycle != nil {
+		next.Cycle = *req.Cycle
+	}
+	if req.CycleSeconds != 0 {
+		next.CycleSeconds = req.CycleSeconds
+	}
 	if req.LimitStyle != "" {
 		next.LimitStyle = req.LimitStyle
 	}
@@ -179,8 +214,8 @@ func (s *Service) Save(req SaveRequest) (view View, err error) {
 	if s.OnSaved != nil && (next.Source != saved.Source || (next.Source == "Hub" && conn != before)) {
 		s.OnSaved()
 	}
-	if styleOf(next) != styleOf(saved) && s.OnStyleSaved != nil {
-		s.OnStyleSaved()
+	if (styleOf(next) != styleOf(saved) || next.Cycle != saved.Cycle || cycleSecondsOf(next) != cycleSecondsOf(saved)) && s.OnDisplaySaved != nil {
+		s.OnDisplaySaved()
 	}
 	return viewOf(next, conn, devices), nil
 }
@@ -261,7 +296,7 @@ func viewOf(saved file, conn connection, devices []turzx.Device) View {
 	if saved.DisplayID != "" && !slices.ContainsFunc(devices, func(d turzx.Device) bool { return d.ID == saved.DisplayID }) {
 		displays = append(displays, Display{DeviceID: saved.DisplayID, Name: saved.DisplayName})
 	}
-	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved)}
+	return View{Source: saved.Source, URL: conn.URL, TokenSet: conn.Token != "", DisplayID: saved.DisplayID, Displays: displays, LimitStyle: styleOf(saved), Cycle: saved.Cycle, CycleSeconds: cycleSecondsOf(saved)}
 }
 
 // parseOrigin accepts only http(s)://host[:port] with an optional trailing slash.
@@ -284,6 +319,18 @@ func LimitStyle(s *Service) string {
 		return "Gauges"
 	}
 	return styleOf(saved)
+}
+
+// CycleSetting returns whether the pages cycle and how long each stays, off and the default when the
+// file cannot be read. It is a function, not a method, so Wails does not bind it.
+func CycleSetting(s *Service) (bool, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	saved, _, err := s.read()
+	if err != nil {
+		return false, DefaultCycleSeconds
+	}
+	return saved.Cycle, cycleSecondsOf(saved)
 }
 
 // HiddenLimits returns the saved keys of the windows that are not drawn. It is a function, not a

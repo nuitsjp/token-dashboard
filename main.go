@@ -124,7 +124,13 @@ func run() error {
 	}
 	updateService := updates.New(updateConfig, state, logger, emit, updates.LaunchInstaller, controls.ApproveQuit)
 	usageState := usage.NewState()
-	displayService := &display.Service{State: usageState, Logger: logger, CycleEvery: cycleInterval(),
+	displayService := &display.Service{State: usageState, Logger: logger, Cycle: func() (bool, time.Duration) {
+			on, seconds := settings.CycleSetting(settingsService)
+			if shortIntervals() {
+				return on, cycleInterval()
+			}
+			return on, time.Duration(seconds) * time.Second
+		},
 		Hidden: func() ([]string, error) { return settings.HiddenLimits(settingsService) },
 		Show:   func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) }}
 	renderer := display.NewCanvasRenderer(displayService, emit)
@@ -167,7 +173,7 @@ func run() error {
 		go output.Run(ctx)
 		sink = output.Submit
 	}
-	settingsService.OnStyleSaved = usageState.Touch
+	settingsService.OnDisplaySaved = usageState.Touch
 	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
