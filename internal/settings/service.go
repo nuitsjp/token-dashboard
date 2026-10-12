@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"token-monitor-turzx/internal/fault"
@@ -318,7 +319,16 @@ func (s *Service) write(saved file) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), s.path)
+	// Windows refuses to replace a file that another process has open at that moment, such as a virus
+	// scanner or a reader of the file. The hold is short, so the replacement is tried a few times.
+	var renameErr error
+	for attempt := 0; attempt < 10; attempt++ {
+		if renameErr = os.Rename(tmp.Name(), s.path); renameErr == nil {
+			return nil
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	return renameErr
 }
 
 func viewOf(saved file, conn connection, devices []turzx.Device) View {

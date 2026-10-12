@@ -58,7 +58,13 @@ test('Cycle を入れると、表示しきれない契約をページとして C
   const cycle = () => page.getByRole('switch', { name: 'Cycle' });
   const time = () => page.getByRole('textbox', { name: 'Cycle time' });
   const file = () => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
-  const setTime = async (value: string) => { await time().fill(value); await time().press('Enter'); };
+  // Enter is pressed once a value in range is shown, so that the page has taken it; a smaller one is
+  // made 5 by the input itself.
+  const setTime = async (value: string) => {
+    await time().fill(value);
+    if (Number(value) >= 5) await expect(time()).toHaveValue(new RegExp(`^${value}( s)?$`));
+    await time().press('Enter');
+  };
   // Keeps watching the page on show, for a page that must not change.
   const stays = async (colour: number[], ms = 2_500) => {
     const end = Date.now() + ms;
@@ -120,6 +126,8 @@ test('Cycle を入れると、表示しきれない契約をページとして C
       await cycle().click();
       await expect(cycle()).toHaveAttribute('aria-checked', 'false');
       await expect.poll(() => file().cycle ?? false).toBe(false);
+      // The image is redrawn for the first page, which then stays.
+      await expect.poll(() => shown(view)).toEqual(danger);
       await stays(danger, 1_500);
       // The Display page no longer has them.
       await expect(view.getByRole('switch', { name: 'Cycle' })).toHaveCount(0);

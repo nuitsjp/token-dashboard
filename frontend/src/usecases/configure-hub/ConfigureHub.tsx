@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Group, NumberInput, PasswordInput, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
@@ -63,27 +63,24 @@ export function StyleSelect() {
 // change applies and saves at once.
 export function EditSettings() {
   const draft = useSettingsDraft();
-  const [cycleText, setCycleTextState] = useState<number | string>('');
-  // The latest entry, which a key press right after typing reads before the next render.
-  const cycleEntry = useRef<number | string>('');
-  const setCycleText = (value: number | string) => { cycleEntry.current = value; setCycleTextState(value); };
-  const [awayText, setAwayTextState] = useState<number | string>('');
-  const awayEntry = useRef<number | string>('');
-  const setAwayText = (value: number | string) => { awayEntry.current = value; setAwayTextState(value); };
+  const [cycleText, setCycleText] = useState<number | string>('');
+  const [awayText, setAwayText] = useState<number | string>('');
   const seconds = draft?.cycleSeconds;
   const minutes = draft?.awayMinutes;
   useEffect(() => { if (seconds !== undefined) setCycleText(seconds); }, [seconds]);
   useEffect(() => { if (minutes !== undefined) setAwayText(minutes); }, [minutes]);
   if (!draft) return null;
-  // An unchanged or invalid entry shows the saved value again; the server refuses a value out of range.
-  const commitCycle = () => {
-    const value = cycleEntry.current;
-    if (typeof value === 'number' && value >= 5 && value <= 3600 && value !== draft.cycleSeconds) draft.setCycleSeconds(value);
+  // The entry is read from the input itself, which has it before the page has taken the change. An
+  // unchanged or invalid entry shows the saved value again; the server refuses a value out of range.
+  const number = (raw: string) => /\d/.test(raw) ? Number(raw.replace(/\D/g, '')) : NaN;
+  const commitCycle = (raw: string) => {
+    const value = number(raw);
+    if (value >= 5 && value <= 3600 && value !== draft.cycleSeconds) draft.setCycleSeconds(value);
     else setCycleText(draft.cycleSeconds);
   };
-  const commitAway = () => {
-    const value = awayEntry.current;
-    if (typeof value === 'number' && value >= 1 && value <= 240 && value !== draft.awayMinutes) draft.setAwayMinutes(value);
+  const commitAway = (raw: string) => {
+    const value = number(raw);
+    if (value >= 1 && value <= 240 && value !== draft.awayMinutes) draft.setAwayMinutes(value);
     else setAwayText(draft.awayMinutes);
   };
   return <Stack gap="md">
@@ -93,13 +90,13 @@ export function EditSettings() {
           <SwitchButton role="switch" label="Cycle" checked={draft.cycle ? 'true' : 'false'} onClick={() => draft.setCycle(!draft.cycle)} />
           <NumberInput w={110} aria-label="Cycle time" suffix=" s" min={5} max={3600} step={1} allowDecimal={false} clampBehavior="strict" hideControls
             styles={{ input: { textAlign: 'right' } }} error={draft.fields.cycleSeconds}
-            value={cycleText} onChange={setCycleText} onBlur={commitCycle} onKeyDown={e => { if (e.key === 'Enter') commitCycle(); }} />
+            value={cycleText} onChange={setCycleText} onBlur={e => commitCycle(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter') commitCycle(e.currentTarget.value); }} />
         </Group>
       </Row>
       <Row title="Away time" hint="No input for this long switches the TURZX off">
         <NumberInput w={110} aria-label="Away time" suffix=" min" min={1} max={240} step={1} allowDecimal={false} clampBehavior="strict" hideControls
           styles={{ input: { textAlign: 'right' } }} error={draft.fields.awayMinutes}
-          value={awayText} onChange={setAwayText} onBlur={commitAway} onKeyDown={e => { if (e.key === 'Enter') commitAway(); }} />
+          value={awayText} onChange={setAwayText} onBlur={e => commitAway(e.currentTarget.value)} onKeyDown={e => { if (e.key === 'Enter') commitAway(e.currentTarget.value); }} />
       </Row>
     </Card>
     <ErrorNotice error={draft.errorFor('display')} />
