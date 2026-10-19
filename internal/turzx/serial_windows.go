@@ -69,19 +69,11 @@ func (c *Conn) serialWrite(data []byte) error {
 	return nil
 }
 
-func (c *Conn) SendRGB565(data []byte, width, height int) error {
+func (c *Conn) SendRGB565(data []byte, width, height int, reverse180 bool) error {
 	if !c.serial || (width != 480 || height != 320) && (width != 320 || height != 480) || len(data) != width*height*2 {
 		return fmt.Errorf("invalid TURZX RGB565 frame")
 	}
-	orientation := byte(100)
-	if width > height {
-		orientation = 102
-	}
-	command := make([]byte, 16)
-	command[5], command[6] = 121, orientation
-	command[7], command[8] = byte(width>>8), byte(width)
-	command[9], command[10] = byte(height>>8), byte(height)
-	if err := c.serialWrite(command); err != nil {
+	if err := c.serialWrite(revAOrientation(width, height, reverse180)); err != nil {
 		return err
 	}
 	if err := c.serialWrite(revACommand(197, 0, 0, width-1, height-1)); err != nil {

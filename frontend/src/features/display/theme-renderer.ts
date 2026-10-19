@@ -87,7 +87,7 @@ export async function startThemeRenderer() {
   let requested = false;
   let completedID = 0;
 
-  async function draw(themeId: string, data: ThemeData, outputFormat?: string, shiftX = 0, shiftY = 0, reverse180 = false) {
+  async function draw(themeId: string, data: ThemeData, outputFormat?: string, shiftX = 0, shiftY = 0) {
     // Subscribe first so a failed initial asset request can be retried by the next frame.
     if (icons === undefined) {
       [icons] = await Promise.all([Display.AgentIcons(), document.fonts.load('500 22px "Yu Gothic"'), document.fonts.load('700 42px "Yu Gothic"')]);
@@ -146,7 +146,6 @@ export async function startThemeRenderer() {
       rotated.canvas.height = jpegOutput ? width : height;
       rotated.context.setTransform(1, 0, 0, 1, 0, 0);
       if (jpegOutput) { rotated.context.translate(height, 0); rotated.context.rotate(Math.PI / 2); }
-      else if (reverse180) { rotated.context.translate(width, height); rotated.context.rotate(Math.PI); }
       // The gap the shift leaves is filled with the background, which is the colour of the image's corner.
       const [r, g, b] = drawing.context.getImageData(0, 0, 1, 1).data;
       rotated.context.fillStyle = `rgb(${r}, ${g}, ${b})`;
@@ -163,7 +162,7 @@ export async function startThemeRenderer() {
     const snapshot = structuredClone(request.data);
     latest = snapshot;
     for (const listener of themeDataListeners) listener();
-    const frame = await enqueue(() => draw(request.theme, snapshot, request.outputFormat, request.shiftX, request.shiftY, request.reverse180));
+    const frame = await enqueue(() => draw(request.theme, snapshot, request.outputFormat, request.shiftX, request.shiftY));
     await Display.CompleteFrame(request.id, frame.png, frame.jpeg, '');
   }
 

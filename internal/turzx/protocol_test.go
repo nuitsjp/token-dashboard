@@ -23,6 +23,26 @@ func TestRevAFullScreenBitmapCoordinates(t *testing.T) {
 	}
 }
 
+func TestRevAOrientation(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		width, height int
+		reverse180    bool
+		packet        []byte
+	}{
+		{"portrait", 320, 480, false, []byte{0, 0, 0, 0, 0, 121, 100, 1, 64, 1, 224, 0, 0, 0, 0, 0}},
+		{"reverse portrait", 320, 480, true, []byte{0, 0, 0, 0, 0, 121, 101, 1, 64, 1, 224, 0, 0, 0, 0, 0}},
+		{"landscape", 480, 320, false, []byte{0, 0, 0, 0, 0, 121, 102, 1, 224, 1, 64, 0, 0, 0, 0, 0}},
+		{"reverse landscape", 480, 320, true, []byte{0, 0, 0, 0, 0, 121, 103, 1, 224, 1, 64, 0, 0, 0, 0, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := revAOrientation(tc.width, tc.height, tc.reverse180); !bytes.Equal(got, tc.packet) {
+				t.Fatalf("orientation header: % X, want % X", got, tc.packet)
+			}
+		})
+	}
+}
+
 func TestPacket(t *testing.T) {
 	now := time.Date(2026, 9, 27, 1, 2, 3, 4_000_000, time.Local)
 	p, timestamp := packet(cmdJPEG, []byte{1, 2, 3}, now)

@@ -3,7 +3,7 @@ import type { FrameRequest } from '../../../bindings/token-monitor-turzx/interna
 
 export type PNGFrame = { request: FrameRequest; png: string; device: string };
 
-// Compare every device pixel against the unshifted preview, undoing only the device's rotation.
+// Compare every device pixel against the shifted, upright PNG; the device applies its rotation.
 // The preview's corner is also the expected fill for every clipped row/column.
 export async function checkPNGShift(page: Page, frames: PNGFrame[]) {
   return page.evaluate(async frames => {
@@ -21,7 +21,7 @@ export async function checkPNGShift(page: Page, frames: PNGFrame[]) {
       for (let y = 0; y < r.height; y++) for (let x = 0; x < r.width; x++) {
         const sx = x - r.shiftX, sy = y - r.shiftY;
         const source = sx < 0 || sy < 0 || sx >= r.width || sy >= r.height ? 0 : (sy * r.width + sx) * 4;
-        const target = r.reverse180 ? ((r.height - 1 - y) * r.width + r.width - 1 - x) * 4 : (y * r.width + x) * 4;
+        const target = (y * r.width + x) * 4;
         for (let channel = 0; channel < 4; channel++) {
           if (preview.data[source + channel] !== device.data[target + channel]) throw new Error(`Pixel mismatch: ${r.theme}, reverse=${r.reverse180}, shift=${r.shiftX},${r.shiftY}, pixel=${x},${y}`);
         }
