@@ -265,18 +265,40 @@ func (s *Service) List() ([]StoredStyle, error) {
 	}
 	list := []StoredStyle{}
 	for id, definition := range s.definitions {
-		dir := filepath.Join(s.dir, id)
-		if err := definition.check(dir); err != nil {
-			return nil, unavailable()
-		}
-		manifest := definition.manifest
-		files, err := readTree(dir)
+		stored, err := s.readStored(id, definition)
 		if err != nil {
-			return nil, s.copyFailed(err)
+			return nil, err
 		}
-		list = append(list, StoredStyle{ID: manifest.ID, Name: manifest.Name, Width: manifest.Width, Height: manifest.Height, DataLayout: manifest.DataLayout, Files: files})
+		list = append(list, stored)
 	}
 	return list, nil
+}
+
+// Read reads one style kept in the app.
+func (s *Service) Read(id string) (StoredStyle, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.loadDefinitions(); err != nil {
+		return StoredStyle{}, err
+	}
+	definition, ok := s.definitions[id]
+	if !ok {
+		return StoredStyle{}, unavailable()
+	}
+	return s.readStored(id, definition)
+}
+
+func (s *Service) readStored(id string, definition definition) (StoredStyle, error) {
+	dir := filepath.Join(s.dir, id)
+	if err := definition.check(dir); err != nil {
+		return StoredStyle{}, unavailable()
+	}
+	manifest := definition.manifest
+	files, err := readTree(dir)
+	if err != nil {
+		return StoredStyle{}, s.copyFailed(err)
+	}
+	return StoredStyle{ID: manifest.ID, Name: manifest.Name, Width: manifest.Width, Height: manifest.Height, DataLayout: manifest.DataLayout, Files: files}, nil
 }
 
 func (s *Service) stored(id string) bool {

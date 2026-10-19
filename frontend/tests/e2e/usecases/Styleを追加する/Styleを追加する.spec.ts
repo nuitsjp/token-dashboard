@@ -1,10 +1,12 @@
-import { test, expect, chromium, type Page } from '@playwright/test';
+import { test, expect, chromium, type Page, type Response } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { appProcesses, powershell, waitFor } from '../../support/desktop';
 import { startHub } from '../../support/hub';
+import { startServer } from '../../support/server';
+import { shortIntervals } from '../../support/local';
 import type { FrameRequest } from '../../../../bindings/token-monitor-turzx/internal/display/models';
 
 // Opens the desktop folder dialog, so it runs only when STYLE_E2E=1. The development
@@ -371,4 +373,103 @@ for (const small of [true, false]) test(`外部スタイルを取り込み、適
     }
   }
   if (cleanupError) throw cleanupError;
+});
+
+for (const small of [true, false]) test(`未選択スタイルの画像欠損が正常な表示を止めない (${small ? '3.5' : '9.2'}インチ)`, async ({ page, context }) => {
+  test.setTimeout(90_000);
+  const work = mkdtempSync(join(tmpdir(), 'turzx-style-isolation-'));
+  const dataDir = join(work, 'data');
+  const hub = await startHub();
+  saveSettings(dataDir, hub.url, small);
+  const broken = samples[1];
+  const healthy = small ? samples[0] : largeStyles[1];
+  const store = join(dataDir, 'styles');
+  cpSync(join(root, 'examples/styles', broken.id), join(store, broken.id), { recursive: true });
+  const missingImage = join(store, broken.id, 'assets/badge.svg');
+  rmSync(missingImage);
+  if (small) cpSync(join(root, 'examples/styles', healthy.id), join(store, healthy.id), { recursive: true });
+  else writeStyle(join(store, healthy.id), healthy.id, healthy.name, readFileSync(join(root, 'themes/bars/style.css'), 'utf8'), 'bars');
+  const port = small ? 34143 : 34144;
+  let server = await startServer(dataDir, port, shortIntervals);
+  let completed: FrameRequest | undefined;
+  let renderError = '';
+  let stopObserving: (() => void) | undefined;
+  const observe = (target: Page) => {
+    const requests = new Map<number, FrameRequest>();
+    const onResponse = async (response: Response) => {
+      if (!response.url().endsWith('/wails/runtime') || !response.ok()) return;
+      const call = response.request().postDataJSON()?.args;
+      if (call?.methodName === displayAPI + 'RenderRequest') {
+        let request: FrameRequest | null;
+        try {
+          request = await response.json() as FrameRequest | null;
+        } catch (error) {
+          if (target.isClosed()) return;
+          throw error;
+        }
+        if (request) requests.set(request.id, request);
+      }
+      if (call?.methodName === displayAPI + 'CompleteFrame') {
+        if (call.args[3]) renderError = call.args[3];
+        else if (call.args[1] && call.args[2]) completed = requests.get(call.args[0]);
+      }
+    };
+    target.on('response', onResponse);
+    return () => target.off('response', onResponse);
+  };
+  const waitForFrame = async (id: string, width: number, height: number) => {
+    await expect.poll(() => ({ theme: completed?.theme, available: completed?.data.available }), { timeout: 15_000 })
+      .toEqual({ theme: id, available: true });
+    await expect.poll(() => page.getByRole('img', { name: 'Display preview', exact: true })
+      .evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([width, height]);
+  };
+  try {
+    stopObserving = observe(page);
+    await expect.poll(() => hub.streams()).toBe(1);
+    hub.send('snapshot', stats(20));
+    await page.goto(server.url);
+    await waitForFrame(small ? 'gauges-35-landscape' : 'gauges', small ? 480 : 1920, small ? 320 : 462);
+
+    // The resident output must keep updating even though the unrelated Paper image is absent.
+    const previousID = completed!.id;
+    hub.send('stats', stats(50));
+    await expect.poll(() => completed?.id).toBeGreaterThan(previousID);
+    await expect.poll(() => small
+      ? completed?.data.service?.circles?.[0]?.windows?.[0]?.remainingPercent
+      : completed?.data.gaugePanels?.[0]?.circles?.[0]?.windows?.[0]?.remainingPercent).toBe(50);
+    expect(renderError).toBe('');
+    await page.getByRole('textbox', { name: 'Display style', exact: true }).click();
+    await page.getByRole('option', { name: healthy.name, exact: true }).click();
+    await waitForFrame(healthy.id, healthy.width, healthy.height);
+
+    // A healthy external style is restored without opening the Styles list or reading Paper.
+    stopObserving?.(); stopObserving = undefined;
+    await page.close(); await server.stop();
+    await expect.poll(() => hub.streams()).toBe(0);
+    completed = undefined;
+    server = await startServer(dataDir, port, shortIntervals);
+    await expect.poll(() => hub.streams()).toBe(1);
+    hub.send('snapshot', stats(50));
+    page = await context.newPage(); stopObserving = observe(page); await page.goto(server.url);
+    await waitForFrame(healthy.id, healthy.width, healthy.height);
+    expect(renderError).toBe('');
+
+    if (small) {
+      await page.getByRole('textbox', { name: 'Display style', exact: true }).click();
+      await page.getByRole('option', { name: broken.name, exact: true }).click();
+      await expect.poll(() => renderError).toContain('badge.svg');
+      expect(completed!.theme).toBe(healthy.id);
+      const file = join(dataDir, 'settings.json');
+      expect(JSON.parse(readFileSync(file, 'utf8')).limitStyle).toBe(broken.id);
+      // Failed loads are retried: repairing the asset resumes the selected style, without a fallback.
+      copyFileSync(join(root, 'examples/styles', broken.id, 'assets/badge.svg'), missingImage);
+      hub.send('stats', stats(70));
+      await waitForFrame(broken.id, broken.width, broken.height);
+      expect(JSON.parse(readFileSync(file, 'utf8')).limitStyle).toBe(broken.id);
+    }
+  } finally {
+    stopObserving?.();
+    await server.stop(); await hub.close();
+    rmSync(work, { recursive: true, force: true });
+  }
 });

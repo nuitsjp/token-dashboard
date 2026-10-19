@@ -110,3 +110,59 @@ func TestChangedStagedFilesNeverBecomeSelectable(t *testing.T) {
 		t.Fatalf("failed import left temporary files: %v, %v", entries, err)
 	}
 }
+
+func TestReadIsolatesUnavailableStoredStyle(t *testing.T) {
+	root := t.TempDir()
+	store := filepath.Join(root, "styles")
+	service := testService(t, store)
+	for _, item := range []struct {
+		id   string
+		name string
+	}{
+		{id: "healthy", name: "Healthy"},
+		{id: "broken", name: "Broken"},
+	} {
+		source := filepath.Join(root, item.id)
+		writeStyle(t, source, item.id, item.name)
+		if err := os.WriteFile(filepath.Join(source, "asset.svg"), []byte(item.id), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		draft, err := service.BeginImport(source, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := service.FinishImport(draft.Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Remove(filepath.Join(store, "broken", "asset.svg")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := service.List(); public(t, err).Code != "STYLE_UNAVAILABLE" {
+		t.Fatal("listing should fail when one stored style is unavailable")
+	}
+	got, err := service.Read("healthy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "healthy" || got.Name != "Healthy" || got.Width != 1920 || got.Height != 462 || got.DataLayout != "gauges" {
+		t.Fatalf("read metadata: %+v", got)
+	}
+	if got.Files["theme.json"] == "" || got.Files["template.hbs"] == "" || got.Files["style.css"] == "" || got.Files["asset.svg"] == "" || len(got.Files) != 4 {
+		t.Fatalf("read files: %+v", got.Files)
+	}
+	if public(t, func() error { _, err := service.Read("broken"); return err }()).Code != "STYLE_UNAVAILABLE" {
+		t.Fatal("reading the unavailable style should fail")
+	}
+	for _, id := range []string{"missing", "../healthy"} {
+		if public(t, func() error { _, err := service.Read(id); return err }()).Code != "STYLE_UNAVAILABLE" {
+			t.Fatalf("reading %q should fail", id)
+		}
+	}
+
+	restarted := testService(t, store)
+	if got, err := restarted.Read("healthy"); err != nil || got.ID != "healthy" || got.Name != "Healthy" || len(got.Files) != 4 {
+		t.Fatalf("read after restart: %+v, %v", got, err)
+	}
+}

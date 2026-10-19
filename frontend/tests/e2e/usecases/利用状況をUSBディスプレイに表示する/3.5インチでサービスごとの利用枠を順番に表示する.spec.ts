@@ -170,13 +170,53 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
       await summary.focus(); await page.keyboard.press('Enter');
       await expect(content('Claude')).toBeVisible();
       await content('Claude').getByText('Tokens', { exact: true }).click();
-      await expect.poll(() => file().presentation.services.Hub.Claude.content).toBe('Tokens');
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Tokens');
       await page.getByRole('switch', { name: 'Show Claude', exact: true }).click();
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeDisabled();
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeChecked();
       await page.getByRole('switch', { name: 'Show Claude', exact: true }).click();
       await content('Claude').getByText('Both', { exact: true }).click();
       await expect.poll(() => frame?.data.service?.count).toBe(6);
+
+      const originalInterval = file().serviceCycleSeconds ?? 10;
+      await setPageInterval(3600);
+      for (const [label, id, width, height] of styles) {
+        await selectStyle(label, id, width, height);
+        await expect.poll(() => frame?.data.service?.provider).toBe('Claude');
+        await expect.poll(() => frame?.data.service?.number).toBe(1);
+
+        for (const selected of ['Limits', 'Both'] as const) {
+          const previousID = completed!.request.id;
+          await content('Claude').getByText(selected, { exact: true }).click();
+          await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe(selected);
+          await expect.poll(() => {
+            const request = completed?.request;
+            const service = request?.data.service;
+            return request !== undefined && request.id > previousID && request.theme === id && request.data.available
+              && service?.provider === 'Claude' && service.showTokens === (selected === 'Both') && service.showLimits;
+          }).toBe(true);
+
+          const service = completed!.request.data.service!;
+          expect(completed!.request.data.available).toBe(true);
+          expect(service).toMatchObject({
+            provider: 'Claude', plan: 'Pro', number: 1, count: 6,
+            showTokens: selected === 'Both', showLimits: true, both: selected === 'Both',
+          });
+          const expectedLabels = ['Alpha 5h', 'Beta 5h', 'Gamma Weekly'];
+          if (id.startsWith('gauges')) {
+            expect(service.circles).toHaveLength(3);
+            expect(service.circles!.map(circle => circle.name)).toEqual(['Alpha', 'Beta', 'Gamma']);
+            expect(service.circles!.flatMap(circle => circle.windows ?? []).map(window => window.label)).toEqual(expectedLabels);
+          } else {
+            expect(service.windows).toHaveLength(3);
+            expect(service.windows!.map(window => window.label)).toEqual(expectedLabels);
+          }
+        }
+      }
+      await selectStyle(...styles[0]);
+      await expect.poll(() => frame?.data.service?.provider).toBe('Claude');
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Both');
+      await setPageInterval(originalInterval);
     });
     await test.step('手順5', async () => {
       await setPageInterval(5, true);
