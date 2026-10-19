@@ -1,5 +1,59 @@
 package turzx
 
+import "image"
+
+// rgb565Regions returns the smallest rectangles covering changed pixels in
+// each run of consecutive rows.
+func rgb565Regions(data, previous []byte, width, height int) []image.Rectangle {
+	if previous == nil {
+		return []image.Rectangle{image.Rect(0, 0, width, height)}
+	}
+
+	var regions []image.Rectangle
+	inRegion := false
+	regionMinX, regionMaxX, regionStartY := 0, 0, 0
+	for y := 0; y < height; y++ {
+		rowMinX, rowMaxX := width, -1
+		rowOffset := y * width * 2
+		for x := 0; x < width; x++ {
+			offset := rowOffset + x*2
+			if data[offset] == previous[offset] && data[offset+1] == previous[offset+1] {
+				continue
+			}
+			if x < rowMinX {
+				rowMinX = x
+			}
+			if x > rowMaxX {
+				rowMaxX = x
+			}
+		}
+
+		if rowMaxX == -1 {
+			if inRegion {
+				regions = append(regions, image.Rect(regionMinX, regionStartY, regionMaxX+1, y))
+				inRegion = false
+			}
+			continue
+		}
+
+		if !inRegion {
+			regionMinX, regionMaxX, regionStartY = rowMinX, rowMaxX, y
+			inRegion = true
+			continue
+		}
+		if rowMinX < regionMinX {
+			regionMinX = rowMinX
+		}
+		if rowMaxX > regionMaxX {
+			regionMaxX = rowMaxX
+		}
+	}
+	if inRegion {
+		regions = append(regions, image.Rect(regionMinX, regionStartY, regionMaxX+1, height))
+	}
+	return regions
+}
+
 // Rev. A rotates the display's write direction, so RGB565 stays in upright row order.
 func revAOrientation(width, height int, reverse180 bool) []byte {
 	orientation := byte(100)

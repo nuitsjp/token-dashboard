@@ -4,6 +4,7 @@ package turzx
 
 import (
 	"fmt"
+	"image"
 	"syscall"
 	"unsafe"
 
@@ -73,14 +74,51 @@ func (c *Conn) SendRGB565(data []byte, width, height int, reverse180 bool) error
 	if !c.serial || (width != 480 || height != 320) && (width != 320 || height != 480) || len(data) != width*height*2 {
 		return fmt.Errorf("invalid TURZX RGB565 frame")
 	}
-	if err := c.serialWrite(revAOrientation(width, height, reverse180)); err != nil {
+	previous := c.lastRGB565
+	if width != c.lastWidth || height != c.lastHeight || reverse180 != c.lastReverse180 {
+		previous = nil
+	}
+	regions := rgb565Regions(data, previous, width, height)
+	if len(regions) == 0 {
+		return nil
+	}
+	// Hide intermediate rectangles. A failed bitmap write must not be followed by
+	// a screen-on command, which could be consumed as the remaining pixel data.
+	if err := c.serialWrite(revACommand(108, 0, 0, 0, 0)); err != nil {
 		return err
 	}
-	if err := c.serialWrite(revACommand(197, 0, 0, width-1, height-1)); err != nil {
+	if previous == nil {
+		if err := c.serialWrite(revAOrientation(width, height, reverse180)); err != nil {
+			return err
+		}
+	}
+	for _, region := range regions {
+		if err := c.sendRGB565Region(data, width, region); err != nil {
+			return err
+		}
+	}
+	// Writes share one synchronous COM stream; no fixed delay or unbounded flush.
+	if err := c.serialWrite(revACommand(109, 0, 0, 0, 0)); err != nil {
 		return err
 	}
-	for start := 0; start < len(data); start += width * 8 {
-		if err := c.serialWrite(data[start:min(start+width*8, len(data))]); err != nil {
+	c.lastRGB565 = append(c.lastRGB565[:0], data...)
+	c.lastWidth, c.lastHeight, c.lastReverse180 = width, height, reverse180
+	return nil
+}
+
+func (c *Conn) sendRGB565Region(data []byte, width int, region image.Rectangle) error {
+	if err := c.serialWrite(revACommand(197, region.Min.X, region.Min.Y, region.Max.X-1, region.Max.Y-1)); err != nil {
+		return err
+	}
+	pixels := data[region.Min.Y*width*2 : region.Max.Y*width*2]
+	if region.Dx() != width {
+		pixels = make([]byte, 0, region.Dx()*region.Dy()*2)
+		for y := region.Min.Y; y < region.Max.Y; y++ {
+			pixels = append(pixels, data[(y*width+region.Min.X)*2:(y*width+region.Max.X)*2]...)
+		}
+	}
+	for start := 0; start < len(pixels); start += width * 8 {
+		if err := c.serialWrite(pixels[start:min(start+width*8, len(pixels))]); err != nil {
 			return err
 		}
 	}
