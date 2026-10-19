@@ -170,7 +170,7 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
       await summary.focus(); await page.keyboard.press('Enter');
       await expect(content('Claude')).toBeVisible();
       await content('Claude').getByText('Tokens', { exact: true }).click();
-      await expect.poll(() => file().presentation.services.Hub.Claude.content).toBe('Tokens');
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Tokens');
       await page.getByRole('switch', { name: 'Show Claude', exact: true }).click();
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeDisabled();
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeChecked();
@@ -188,7 +188,7 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
         for (const selected of ['Limits', 'Both'] as const) {
           const previousID = completed!.request.id;
           await content('Claude').getByText(selected, { exact: true }).click();
-          await expect.poll(() => file().presentation.services.Hub.Claude.content).toBe(selected);
+          await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe(selected);
           await expect.poll(() => {
             const request = completed?.request;
             const service = request?.data.service;
@@ -215,7 +215,7 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
       }
       await selectStyle(...styles[0]);
       await expect.poll(() => frame?.data.service?.provider).toBe('Claude');
-      await expect.poll(() => file().presentation.services.Hub.Claude.content).toBe('Both');
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Both');
       await setPageInterval(originalInterval);
     });
     await test.step('手順5', async () => {

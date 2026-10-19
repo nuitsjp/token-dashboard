@@ -1,4 +1,4 @@
-import { test, expect, chromium, type Page } from '@playwright/test';
+import { test, expect, chromium, type Page, type Response } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, copyFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -393,20 +393,29 @@ for (const small of [true, false]) test(`未選択スタイルの画像欠損が
   let server = await startServer(dataDir, port, shortIntervals);
   let completed: FrameRequest | undefined;
   let renderError = '';
+  let stopObserving: (() => void) | undefined;
   const observe = (target: Page) => {
     const requests = new Map<number, FrameRequest>();
-    target.on('response', async response => {
+    const onResponse = async (response: Response) => {
       if (!response.url().endsWith('/wails/runtime') || !response.ok()) return;
       const call = response.request().postDataJSON()?.args;
       if (call?.methodName === displayAPI + 'RenderRequest') {
-        const request = await response.json() as FrameRequest | null;
+        let request: FrameRequest | null;
+        try {
+          request = await response.json() as FrameRequest | null;
+        } catch (error) {
+          if (target.isClosed()) return;
+          throw error;
+        }
         if (request) requests.set(request.id, request);
       }
       if (call?.methodName === displayAPI + 'CompleteFrame') {
         if (call.args[3]) renderError = call.args[3];
         else if (call.args[1] && call.args[2]) completed = requests.get(call.args[0]);
       }
-    });
+    };
+    target.on('response', onResponse);
+    return () => target.off('response', onResponse);
   };
   const waitForFrame = async (id: string, width: number, height: number) => {
     await expect.poll(() => ({ theme: completed?.theme, available: completed?.data.available }), { timeout: 15_000 })
@@ -415,7 +424,7 @@ for (const small of [true, false]) test(`未選択スタイルの画像欠損が
       .evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([width, height]);
   };
   try {
-    observe(page);
+    stopObserving = observe(page);
     await expect.poll(() => hub.streams()).toBe(1);
     hub.send('snapshot', stats(20));
     await page.goto(server.url);
@@ -434,13 +443,14 @@ for (const small of [true, false]) test(`未選択スタイルの画像欠損が
     await waitForFrame(healthy.id, healthy.width, healthy.height);
 
     // A healthy external style is restored without opening the Styles list or reading Paper.
+    stopObserving?.(); stopObserving = undefined;
     await page.close(); await server.stop();
     await expect.poll(() => hub.streams()).toBe(0);
     completed = undefined;
     server = await startServer(dataDir, port, shortIntervals);
     await expect.poll(() => hub.streams()).toBe(1);
     hub.send('snapshot', stats(50));
-    page = await context.newPage(); observe(page); await page.goto(server.url);
+    page = await context.newPage(); stopObserving = observe(page); await page.goto(server.url);
     await waitForFrame(healthy.id, healthy.width, healthy.height);
     expect(renderError).toBe('');
 
@@ -458,6 +468,7 @@ for (const small of [true, false]) test(`未選択スタイルの画像欠損が
       expect(JSON.parse(readFileSync(file, 'utf8')).limitStyle).toBe(broken.id);
     }
   } finally {
+    stopObserving?.();
     await server.stop(); await hub.close();
     rmSync(work, { recursive: true, force: true });
   }
