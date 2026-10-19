@@ -40,6 +40,9 @@ var webAssets embed.FS
 //go:embed build/app.json
 var configJSON []byte
 
+//go:embed themes/*/theme.json themes/services/*/theme.json
+var themeManifests embed.FS
+
 // Fixed at build time through -ldflags -X (see scripts/build.mjs): the release CI sets
 // the version from the tag, and the desktop E2E also sets a local update source.
 // An empty value keeps the one in build/app.json.
@@ -134,7 +137,25 @@ func run() error {
 		Show:       func(keys []string, shown bool) error { return settings.SetLimitsShown(settingsService, keys, shown) },
 		ShiftEvery: shiftInterval()}
 	renderer := display.NewCanvasRenderer(displayService, emit)
-	output := display.NewOutput(func() (string, error) { return settings.DisplayTarget(settingsService) }, logger)
+	displayService.Themes, err = display.ReadThemes(themeManifests)
+	if err != nil {
+		return err
+	}
+	settings.ConfigureDisplay(settingsService, displayService.Themes)
+	styles.Configure(styleService, displayService.Themes, func(id string, remove func() error) error {
+		return settings.DeleteStyle(settingsService, id, remove)
+	}, func() { emit("styles:changed", nil) })
+	settings.ConfigureCatalog(settingsService, func(selected string) (map[string]display.Theme, error) {
+		return styles.Catalog(styleService, selected)
+	})
+	displayService.Theme = func(id string) (display.Theme, error) { return settings.DisplayTheme(settingsService, id) }
+	displayService.Configuration = func() (display.Configuration, error) {
+		config, err := settings.DisplayConfiguration(settingsService)
+		config.CycleEvery = cycleEvery(config.CycleSeconds)
+		return config, err
+	}
+	output := display.NewOutput(displayService.Configuration, logger)
+	output.Redraw = usageState.Touch
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	options := application.Options{
@@ -168,7 +189,7 @@ func run() error {
 		}}
 	}
 	app = application.New(options)
-	sink := func([]byte) {}
+	sink := func(display.Frame) {}
 	if !serverMode {
 		go output.Run(ctx)
 		sink = output.Submit
@@ -181,7 +202,6 @@ func run() error {
 		idleAfter = func() int { return math.MaxInt32 }
 	}
 	go presence.Watch(ctx, conditions, idleAfter)
-	go display.Run(ctx, displayService, renderer, usageState, redrawInterval(), func() display.Style { return display.ParseStyle(settings.LimitStyle(settingsService)) }, sink, emit, logger)
 	sourceChanged := make(chan struct{}, 1)
 	settingsService.OnSaved = func() {
 		select {
@@ -189,6 +209,7 @@ func run() error {
 		default:
 		}
 	}
+	go display.RunPresentation(ctx, displayService, renderer, redrawInterval(), sink, emit)
 	go runUsageSource(ctx, settingsService, usageState, logger, sourceChanged, dir)
 	updateReady := func(string) {}
 	if !serverMode {
@@ -248,14 +269,16 @@ func run() error {
 		})
 		updateReady = func(version string) { setUpdate("Update and restart (v" + version + ")") }
 	}
-	if serverMode {
-		// Server mode has no tray and never emits ApplicationStarted.
-		go updates.Run(ctx, updateService, updateReady)
-	} else {
-		// The tray menu can be rebuilt only once the application is running.
-		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+	{
+		if serverMode {
+			// Server mode has no tray and never emits ApplicationStarted.
 			go updates.Run(ctx, updateService, updateReady)
-		})
+		} else {
+			// The tray menu can be rebuilt only once the application is running.
+			app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+				go updates.Run(ctx, updateService, updateReady)
+			})
+		}
 	}
 	return app.Run()
 }

@@ -1,4 +1,4 @@
-// Package turzx talks to TURZX 9.2-inch USB displays over WinUSB.
+// Package turzx talks to supported TURZX displays over WinUSB or USB serial.
 package turzx
 
 import (
@@ -21,10 +21,14 @@ const target = "vid_1cbe&pid_0092"
 // \?\USB#VID_1CBE&PID_0092#633a6e01a48a0706#{guid} to its device instance ID.
 func deviceID(path string) (string, error) {
 	segments := strings.Split(path, "#")
-	if len(segments) < 4 || !strings.Contains(strings.ToLower(path), target) {
-		return "", fmt.Errorf("not a TURZX 9.2-inch interface path")
+	if len(segments) < 4 {
+		return "", fmt.Errorf("not a TURZX interface path")
 	}
-	return strings.ToUpper(`USB\` + segments[1] + `\` + segments[2]), nil
+	id := strings.ToUpper(`USB\` + segments[1] + `\` + segments[2])
+	if _, known := ProfileForID(id); !known {
+		return "", fmt.Errorf("not a supported TURZX interface path")
+	}
+	return id, nil
 }
 
 func displayName(id, product string) string {

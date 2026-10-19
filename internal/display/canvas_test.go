@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -229,9 +230,30 @@ func TestCanvasRejectsInvalidImageDimensions(t *testing.T) {
 
 func TestOutputKeepsTheNewestEncodedJPEG(t *testing.T) {
 	o := NewOutput(nil, nil)
-	o.Submit([]byte("first"))
-	o.Submit([]byte("latest"))
-	if got := string(<-o.pending); got != "latest" || len(o.pending) != 0 {
+	o.Submit(Frame{DeviceImage: []byte("first")})
+	o.Submit(Frame{DeviceImage: []byte("latest")})
+	if got := string((<-o.pending).DeviceImage); got != "latest" || len(o.pending) != 0 {
 		t.Fatalf("pending image: %q", got)
+	}
+}
+
+func TestSmallCanvasPixelsUseRGB565LittleEndian(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 5, 2))
+	palette := []color.RGBA{{255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 255, 255}, {0, 0, 0, 255}}
+	for x, pixel := range palette {
+		src.SetRGBA(x, 0, pixel)
+		src.SetRGBA(4-x, 1, pixel)
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, src); err != nil {
+		t.Fatal(err)
+	}
+	got, err := rgb565(encoded.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The device PNG is already shifted/rotated: conversion must preserve both axes and row order.
+	if !bytes.Equal(got, []byte{0, 0xf8, 0xe0, 7, 0x1f, 0, 0xff, 0xff, 0, 0, 0, 0, 0xff, 0xff, 0x1f, 0, 0xe0, 7, 0, 0xf8}) {
+		t.Fatalf("wire pixels: % X", got)
 	}
 }

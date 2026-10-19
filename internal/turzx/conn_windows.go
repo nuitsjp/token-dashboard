@@ -42,6 +42,7 @@ type pipeInformation struct {
 
 // Conn is an open connection to one TURZX display.
 type Conn struct {
+	serial  bool
 	file    syscall.Handle
 	usb     uintptr
 	in, out uint8
@@ -50,6 +51,13 @@ type Conn struct {
 // Open opens the display whose device instance ID (Device.ID from List) is id,
 // and performs the sync command.
 func Open(id string) (*Conn, error) {
+	profile, known := ProfileForID(id)
+	if !known {
+		return nil, fmt.Errorf("unsupported TURZX device")
+	}
+	if profile.Transport == "serial-reva" {
+		return openSerial(id)
+	}
 	paths, err := interfacePaths()
 	if err != nil {
 		return nil, err
@@ -117,6 +125,9 @@ func (c *Conn) init() error {
 // SendJPEG sends one 462x1920 baseline JPEG (<= 1 MiB) and waits for the
 // device's success response.
 func (c *Conn) SendJPEG(data []byte) error {
+	if c.serial {
+		return fmt.Errorf("serial display requires RGB565")
+	}
 	if err := validateJPEG(data); err != nil {
 		return err
 	}
@@ -126,6 +137,9 @@ func (c *Conn) SendJPEG(data []byte) error {
 // Restart asks the display to restart (command 11). It does not wait for a
 // response because the device may disconnect.
 func (c *Conn) Restart() error {
+	if c.serial {
+		return c.serialWrite(revACommand(101, 0, 0, 0, 0))
+	}
 	p, _ := packet(cmdRestart, nil, time.Now())
 	return c.write(p)
 }

@@ -70,20 +70,26 @@ try {
     // Needs gh to read the latest release. The result is site/dist.
     run(process.execPath, ['site/build.mjs']);
   } else if (command === 'help') {
-    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | tag [version] | release <args> | site');
+    console.log('node scripts/run.mjs setup | dev | build | package | server | verify | test:core | test:desktop | test:styles | tag [version] | release <args> | site');
   } else {
     if (!existsSync(cli)) throw new Error('先に node scripts/run.mjs setup を実行してください。');
     if (command === 'dev') {
       if (!windows) throw new Error('Desktop development is Windows-only. Use server for browser verification.');
       // Not the Wails default 9245, which other Wails projects on this PC also use.
       run(cli, ['dev', '-port', '9345'], root);
+    } else if (command === 'test:styles') {
+      // Uses the native folder picker and CDP; keep separate from headless verify.
+      if (!windows) throw new Error('Native style import verification is Windows-only.');
+      run(cli, ['task', 'build:server']);
+      run(cli, ['task', 'build:dev']);
+      run('npm', ['--prefix', 'frontend', 'run', 'test:e2e', '--', '--grep', '@style-import', '--workers=1'], root, { STYLE_E2E: '1' });
     } else if (command === 'test:desktop') {
       // Installs, updates and uninstalls the desktop app; never part of verify.
       run(cli, ['task', 'build:server']);
       run('npm', ['--prefix', 'frontend', 'run', 'test:e2e', '--', '--grep', '@desktop'], root, { DESKTOP_E2E: '1' });
     } else if (command === 'release') {
       run('go', ['run', './cmd/release', ...args]);
-    } else if (['build', 'package', 'package:prepared', 'ci', 'server', 'verify', 'test:core', 'generate'].includes(command)) {
+    } else if (['build', 'package', 'package:prepared', 'ci', 'server', 'preview:display', 'verify', 'test:core', 'generate'].includes(command)) {
       run(cli, ['task', command]);
     } else throw new Error(`Unknown command: ${command}`);
   }

@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { saveLargeDisplayFixture, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { watchTokscale } from '../../support/processes';
 import { localHome, shortPoll as poll } from '../../support/local';
@@ -84,11 +84,12 @@ test('ローカルの利用記録の変化に合わせて表示を更新し、�
     });
 
     await test.step('手順1', async () => {
+      saveLargeDisplayFixture(dataDir);
       server = await startServer(dataDir, 34121, env);
       tokscale = watchTokscale(server.pid);
       await page.goto(server.url);
       await page.getByRole('textbox', { name: 'Display style' }).click();
-      await page.getByRole('option', { name: 'Bars' }).click();
+      await page.getByRole('option', { name: 'Bars', exact: true }).click();
       await page.getByRole('link', { name: 'Connection' }).click();
       await expect(page.getByRole('textbox', { name: 'Data source' })).toHaveValue('Local');
       await page.getByRole('link', { name: 'Display' }).click();

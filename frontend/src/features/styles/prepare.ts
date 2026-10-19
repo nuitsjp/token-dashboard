@@ -7,7 +7,7 @@ const imageTypes: Record<string, string> = {
 };
 
 export type ThemeFiles = { id: string; name: string; files: { [key: string]: string | undefined } | null };
-export type PreparedTheme = { id: string; name: string; template: string; stylesheet: string };
+export type PreparedTheme = { id: string; name: string; width: number; height: number; dataLayout: string; template: string; stylesheet: string };
 
 function bytesOf(value: string) {
   const binary = atob(value);
@@ -55,9 +55,9 @@ export function prepareTheme(value: ThemeFiles, icons: { [key: string]: string |
   const files = new Map(present);
   const known: Record<string, string> = {};
   for (const [name, data] of Object.entries(icons ?? {})) if (data !== undefined) known[name] = data;
-  const manifest = JSON.parse(text(files, 'theme.json')) as { template?: string; stylesheet?: string };
+  const manifest = JSON.parse(text(files, 'theme.json')) as { width: number; height: number; dataLayout?: string; template?: string; stylesheet?: string };
   if (typeof manifest.template !== 'string' || typeof manifest.stylesheet !== 'string') throw new Error('Invalid display theme manifest');
   const template = embedTemplateImages(text(files, manifest.template), manifest.template, (reference, source) => embed(reference, source, files, known, false));
   const stylesheet = embedStylesheetImages(text(files, manifest.stylesheet), manifest.stylesheet, (reference, source) => embed(reference, source, files, known, true));
-  return { id: value.id, name: value.name, template, stylesheet };
+  return { id: value.id, name: value.name, width: manifest.width, height: manifest.height, dataLayout: manifest.dataLayout ?? 'gauges', template, stylesheet };
 }

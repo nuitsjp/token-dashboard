@@ -1,12 +1,27 @@
 package turzx
 
 import (
+	"bytes"
 	"crypto/cipher"
 	"crypto/des"
 	"encoding/binary"
 	"testing"
 	"time"
 )
+
+func TestRevAFullScreenBitmapCoordinates(t *testing.T) {
+	for _, tc := range []struct {
+		width, height int
+		packet        []byte
+	}{
+		{480, 320, []byte{0, 0, 7, 125, 63, 197}},
+		{320, 480, []byte{0, 0, 4, 253, 223, 197}},
+	} {
+		if got := revACommand(197, 0, 0, tc.width-1, tc.height-1); !bytes.Equal(got, tc.packet) {
+			t.Fatalf("%dx%d bitmap header: % X", tc.width, tc.height, got)
+		}
+	}
+}
 
 func TestPacket(t *testing.T) {
 	now := time.Date(2026, 9, 27, 1, 2, 3, 4_000_000, time.Local)

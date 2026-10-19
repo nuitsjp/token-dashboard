@@ -13,6 +13,16 @@ import (
 )
 
 type contribution struct {
+	Clients []struct {
+		Client string `json:"client"`
+		Tokens *struct {
+			Input      int64 `json:"input"`
+			Output     int64 `json:"output"`
+			CacheRead  int64 `json:"cacheRead"`
+			CacheWrite int64 `json:"cacheWrite"`
+		} `json:"tokens"`
+		Cost *float64 `json:"cost"`
+	} `json:"clients"`
 	Date   string `json:"date"`
 	Totals struct {
 		Cost float64 `json:"cost"`
@@ -96,6 +106,20 @@ func convertGraph(g graph, now time.Time) usage.Periods {
 	for _, c := range g.Contributions {
 		b := c.TokenBreakdown
 		day := usage.Period{TotalTokens: b.Input + b.Output + b.CacheRead + b.CacheWrite, CostUSD: c.Totals.Cost}
+		if len(c.Clients) > 0 {
+			day.ClientBreakdown = &usage.ClientBreakdown{Clients: map[string]int64{}, ClientCosts: map[string]float64{}}
+			for _, client := range c.Clients {
+				if client.Client == "" {
+					continue
+				}
+				if t := client.Tokens; t != nil {
+					day.Clients[client.Client] += t.Input + t.Output + t.CacheRead + t.CacheWrite
+				}
+				if client.Cost != nil {
+					day.ClientCosts[client.Client] += *client.Cost
+				}
+			}
+		}
 		add(&periods.AllTime, day)
 		if strings.HasPrefix(c.Date, month) {
 			add(&periods.Month, day)
@@ -110,6 +134,17 @@ func convertGraph(g graph, now time.Time) usage.Periods {
 func add(total *usage.Period, day usage.Period) {
 	total.TotalTokens += day.TotalTokens
 	total.CostUSD += day.CostUSD
+	if day.ClientBreakdown != nil {
+		if total.ClientBreakdown == nil {
+			total.ClientBreakdown = &usage.ClientBreakdown{Clients: map[string]int64{}, ClientCosts: map[string]float64{}}
+		}
+		for id, tokens := range day.Clients {
+			total.Clients[id] += tokens
+		}
+		for id, cost := range day.ClientCosts {
+			total.ClientCosts[id] += cost
+		}
+	}
 }
 
 func (r *Reader) readLimits(ctx context.Context) (usage.Limits, error) {

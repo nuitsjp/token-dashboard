@@ -2,8 +2,8 @@ package display
 
 import (
 	"context"
-	"encoding/base64"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +26,10 @@ type Service struct {
 	// each page stays.
 	Cycle func() (on bool, every time.Duration)
 	// ShiftEvery is how long the image for the TURZX stays at one offset; zero means 3 minutes.
-	ShiftEvery time.Duration
+	ShiftEvery    time.Duration
+	Themes        map[string]Theme
+	Theme         func(string) (Theme, error)
+	Configuration func() (Configuration, error)
 
 	mu        sync.Mutex
 	preview   string
@@ -106,93 +109,15 @@ func (s *Service) Preview() string {
 	return s.preview
 }
 
-// Run redraws when the state changes and at least every redraw (a minute in the app) so the time
-// until reset stays current. Each image goes to the preview in s and to output. It is a function,
-// not a method, so Wails does not bind it.
+// Run retains the existing large-display entry point and uses the shared scheduler.
 func Run(ctx context.Context, s *Service, renderer *CanvasRenderer, state *usage.State, redraw time.Duration, style func() Style, output func([]byte), emit func(string, any), logger *slog.Logger) {
-	ticker := time.NewTicker(redraw)
-	defer ticker.Stop()
-	cycle, every := s.cycleSetting()
-	turn := time.NewTicker(every)
-	defer turn.Stop()
-	shifter := time.NewTicker(s.shiftEvery())
-	defer shifter.Stop()
-	page, step := 0, 0
-	for {
-		// While away the TURZX shows black. The beat and a change of the usage send it again, so that a
-		// display plugged in during that time is switched off too. Back, the walk starts from the first
-		// position.
-		if away, wake := s.awayState(); away {
-			logger.Info("display_away", "away", true)
-			output(black())
-			for away, _ = s.awayState(); away; away, _ = s.awayState() {
-				select {
-				case <-ctx.Done():
-					return
-				case <-wake:
-				case <-state.Changed():
-					output(black())
-				case <-ticker.C:
-					output(black())
-				}
-			}
-			logger.Info("display_away", "away", false)
-			step = 0
-		}
-		s.setShift(step)
-		var d time.Duration
-		if cycle, d = s.cycleSetting(); d != every {
-			every = d
-			turn.Reset(d)
-		}
-		stats, source := state.Snapshot()
-		// A selection that cannot be read draws every window, as style does for Gauges.
-		hidden, err := s.hiddenSet()
-		if err != nil {
-			logger.Warn("hidden_limits_unavailable", "cause", err)
-		}
-		if !cycle {
-			page = 0
-		}
-		frame, err := renderer.Render(ctx, withoutHidden(stats, hidden), time.Now(), source, style(), page)
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			logger.Error("display_render_failed", "cause", err)
-		} else {
-			output(frame.JPEG)
-			s.mu.Lock()
-			s.preview = "data:image/png;base64," + base64.StdEncoding.EncodeToString(frame.PNG)
-			s.mu.Unlock()
-			emit(Updated, nil)
-			if page >= frame.Pages {
-				page = 0
-			}
-		}
-		pages := frame.Pages
-		_, awayChanged := s.awayState()
-	wait:
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-state.Changed():
-				break wait
-			case <-ticker.C:
-				break wait
-			case <-awayChanged:
-				break wait
-			case <-shifter.C:
-				step = (step + 1) % len(shiftSteps)
-				break wait
-			case <-turn.C:
-				// Only a cycle over more than one page redraws on this beat.
-				if cycle && pages > 1 {
-					page = (page + 1) % pages
-					break wait
-				}
-			}
-		}
+	s.State = state
+	s.Logger = logger
+	configuration := func() (Configuration, error) {
+		_, source := state.Snapshot()
+		cycle, every := s.cycleSetting()
+		selected := style()
+		return Configuration{Theme: Theme{ID: strings.ToLower(string(selected)), Width: Width, Height: Height, DataLayout: strings.ToLower(string(selected))}, Source: source, Cycle: cycle, CycleEvery: every}, nil
 	}
+	runPresentation(ctx, s, renderer, redraw, configuration, func(frame Frame) { output(frame.JPEG) }, emit)
 }

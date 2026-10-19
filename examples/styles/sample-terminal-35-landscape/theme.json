@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "sample-terminal-35-landscape",
+  "name": "Terminal Bars 3.5\" Landscape",
+  "width": 480,
+  "height": 320,
+  "dataLayout": "service-bars",
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}

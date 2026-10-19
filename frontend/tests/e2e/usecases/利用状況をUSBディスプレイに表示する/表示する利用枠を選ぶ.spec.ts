@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { saveLargeDisplayFixture, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
@@ -79,6 +79,7 @@ async function count(page: Page, src: string, colour: number[] | null, rect = [0
 test('表示する枠を契約と枠で選ぶと、保存してプレビューを描き直し、再起動後も保つ', async ({ page, context }) => {
   test.setTimeout(240_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-limits-e2e-'));
+  const selectedOutput = saveLargeDisplayFixture(dataDir);
   const hub = await startHub();
   // The server redraws every second instead of every minute.
   let server = await startServer(dataDir, 34124, shortIntervals);
@@ -186,14 +187,14 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
     await test.step('受け入れ条件', async () => {
       // The same selection applies to Bars, and the Tokens column stays.
       await page.getByRole('textbox', { name: 'Display style' }).click();
-      await page.getByRole('option', { name: 'Bars' }).click();
-      await expect.poll(() => file().limitStyle).toBe('Bars');
+      await page.getByRole('option', { name: 'Bars', exact: true }).click();
+      await expect.poll(() => file().limitStyle).toBe('bars');
       await expect.poll(async () => colourCount(null, [0, 0, 350, 462])).toBeGreaterThan(drawn);
       await expect.poll(() => colourCount(danger)).toBeLessThan(drawn);
       expect(await colourCount(normal)).toBeGreaterThan(drawn);
       await page.getByRole('textbox', { name: 'Display style' }).click();
-      await page.getByRole('option', { name: 'Gauges' }).click();
-      await expect.poll(() => file().limitStyle).toBe('Gauges');
+      await page.getByRole('option', { name: 'Gauges', exact: true }).click();
+      await expect.poll(() => file().limitStyle).toBe('gauges');
 
       // A selection that cannot be saved leaves the list as it was and shows the error.
       copyFileSync(settingsFile, join(dataDir, 'settings.good'));
@@ -247,8 +248,8 @@ test('表示する枠を契約と枠で選ぶと、保存してプレビュー�
       // The selection did not change the source, the connection, the display or the style.
       expect(file().source).toBe('Hub');
       expect(file().connection).toBeTruthy();
-      expect(file().displayID).toBe('');
-      expect(file().limitStyle).toBe('Gauges');
+      expect(file().displayID).toBe(selectedOutput);
+      expect(file().limitStyle).toBe('gauges');
       expect(hub.streams()).toBe(1);
       await expect(page.getByText(token)).toHaveCount(0);
     });

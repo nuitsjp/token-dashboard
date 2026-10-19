@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "sample-midnight-35-landscape",
+  "name": "Midnight Gauges 3.5\" Landscape",
+  "width": 480,
+  "height": 320,
+  "dataLayout": "service-gauges",
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}

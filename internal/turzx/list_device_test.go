@@ -19,7 +19,11 @@ func TestListConnected(t *testing.T) {
 	}
 	name := regexp.MustCompile(`^.+ \([0-9A-F]{8}\)$`)
 	for _, d := range devices {
-		if !name.MatchString(d.Name) {
+		profile, known := ProfileForID(d.ID)
+		if !known {
+			t.Errorf("unexpected device ID %q", d.ID)
+		}
+		if d.Name == "" || profile.Transport == "winusb" && !name.MatchString(d.Name) {
 			t.Errorf("unexpected name %q", d.Name)
 		}
 	}

@@ -3,12 +3,18 @@ import { createRoot } from 'react-dom/client';
 import { MantineProvider, createTheme } from '@mantine/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
+import { Events } from '@wailsio/runtime';
 import '@mantine/core/styles.css';
 import { queryClient, router } from './app/router';
 import { reportFrontendError } from './features/application/queries';
 import { startThemeRenderer } from './features/display/theme-renderer';
 import './style.css';
 void startThemeRenderer().catch(reportFrontendError);
+const catalogChanged = Events.On('styles:changed', () => {
+  void queryClient.invalidateQueries({ queryKey: ['styles', 'catalog'] });
+  void queryClient.invalidateQueries({ queryKey: ['settings'] });
+});
+if (import.meta.hot) import.meta.hot.dispose(catalogChanged);
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element is missing');
 // Dark palette shared with multi-token-monitor: 7 is the page, 6 the card surface.

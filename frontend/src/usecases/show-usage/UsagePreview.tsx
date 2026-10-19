@@ -10,12 +10,12 @@ export function UsagePreview({ title, control, children }: { title: string; cont
   const client = useQueryClient();
   const preview = useQuery(getPreview());
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: previewKey })), [client]);
-  return <Card withBorder padding="md">
+  return <Card withBorder padding="md" style={{ flexShrink: 0 }}>
     <Group gap="md" mb="sm"><Title order={4}>{title}</Title>{control}</Group>
     {children}
     <ErrorNotice error={preview.error} />
     {preview.data
-      ? <Image src={preview.data} alt="Display preview" radius="sm" style={{ aspectRatio: '1920 / 462' }} />
+      ? <Image src={preview.data} alt="Display preview" radius="sm" fit="contain" style={{ width: 'auto', maxWidth: '100%', height: 'auto', maxHeight: 480, alignSelf: 'center' }} />
       : !preview.error && <Text size="sm" c="dimmed">No image yet.</Text>}
   </Card>;
 }

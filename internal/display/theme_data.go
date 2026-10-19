@@ -17,6 +17,8 @@ type ThemeData struct {
 	Tokens         []ThemeToken    `json:"tokens"`
 	GaugePanels    []ThemeContract `json:"gaugePanels"`
 	BarColumns     []ThemeColumn   `json:"barColumns"`
+	Service        *ServicePage    `json:"service"`
+	ServiceMessage string          `json:"serviceMessage"`
 	// GaugePages and BarPages count the pages of each style; the data above is one of them.
 	GaugePages int `json:"-"`
 	BarPages   int `json:"-"`

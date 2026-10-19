@@ -161,8 +161,8 @@ func applyEditPath(hwnd uintptr) {
 
 func pathFromPIDL(pidl uintptr) string {
 	buf := make([]uint16, 32768)
-	hr, _, _ := procPath.Call(pidl, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
-	if hr != 0 {
+	ok, _, _ := procPath.Call(pidl, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
+	if ok == 0 {
 		return ""
 	}
 	return syscall.UTF16ToString(buf)

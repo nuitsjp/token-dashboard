@@ -21,6 +21,13 @@ type Periods struct {
 type Period struct {
 	TotalTokens int64   `json:"totalTokens"`
 	CostUSD     float64 `json:"costUsd"`
+	*ClientBreakdown
+}
+
+// ClientBreakdown preserves missing attribution separately from reported zeroes.
+type ClientBreakdown struct {
+	Clients     map[string]int64   `json:"clients,omitempty"`
+	ClientCosts map[string]float64 `json:"clientCosts,omitempty"`
 }
 
 type Limits struct {

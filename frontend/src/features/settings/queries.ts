@@ -8,6 +8,7 @@ export function useSaveSettings() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (request: SaveRequest) => Settings.Save(request),
-    onSuccess: (view) => { client.setQueryData(settingsKey, view); },
+    onMutate: () => client.cancelQueries({ queryKey: settingsKey }),
+    onSuccess: (view) => { client.setQueryData(settingsKey, view); void client.invalidateQueries({ queryKey: ['display', 'services'] }); },
   });
 }

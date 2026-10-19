@@ -2,6 +2,7 @@ import Handlebars from 'handlebars/runtime';
 import HandlebarsCompiler from 'handlebars';
 import { Events } from '@wailsio/runtime';
 import * as Display from '@bindings/token-monitor-turzx/internal/display/service';
+import { invalidateStyleCatalog, loadStyleCatalog } from '../styles/catalog';
 import type { FrameRequest, ThemeData } from '@bindings/token-monitor-turzx/internal/display/models';
 import { reportFrontendError } from '../application/queries';
 
@@ -10,29 +11,34 @@ type Manifest = {
   id: string;
   width: number;
   height: number;
+  dataLayout?: string;
   template: string;
   stylesheet: string;
 };
 
-const manifests = import.meta.glob<Manifest>('../../../../themes/*/theme.json', { eager: true, import: 'default' });
-const specifications = import.meta.glob<Parameters<typeof Handlebars.template>[0]>('../../../../themes/*/*.hbs', { eager: true, import: 'default' });
-const stylesheets = import.meta.glob<string>('../../../../themes/*/*.css', { eager: true, query: '?raw', import: 'default' });
-type LoadedTheme = { template: Handlebars.TemplateDelegate<ThemeData>; stylesheet: string; shrinkTokens: boolean };
+const manifests = import.meta.glob<Manifest>(['../../../../themes/*/theme.json', '../../../../themes/services/*/theme.json'], { eager: true, import: 'default' });
+const specifications = import.meta.glob<Parameters<typeof Handlebars.template>[0]>(['../../../../themes/*/*.hbs', '../../../../themes/services/*/*.hbs'], { eager: true, import: 'default' });
+const stylesheets = import.meta.glob<string>(['../../../../themes/*/*.css', '../../../../themes/services/*/*.css'], { eager: true, query: '?raw', import: 'default' });
+type LoadedTheme = { template: Handlebars.TemplateDelegate<ThemeData>; stylesheet: string; shrinkTokens: boolean; width: number; height: number };
 
 const themes = new Map(Object.entries(manifests).map(([path, manifest]) => {
   const directory = path.slice(0, path.lastIndexOf('/') + 1);
   const specification = specifications[directory + manifest.template];
   const stylesheet = stylesheets[directory + manifest.stylesheet];
-  return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet, shrinkTokens: manifest.id === 'bars' }] as [string, LoadedTheme];
+  return [manifest.id, { template: Handlebars.template<ThemeData>(specification), stylesheet, shrinkTokens: manifest.dataLayout === 'bars' || manifest.dataLayout?.startsWith('service-') === true, width: manifest.width, height: manifest.height }] as [string, LoadedTheme];
 }));
 
-export function registerTheme(id: string, template: string, stylesheet: string) {
+export function registerTheme(id: string, template: string, stylesheet: string, width: number, height: number, dataLayout: string) {
+  HandlebarsCompiler.parse(template);
   themes.set(id, {
     template: HandlebarsCompiler.compile<ThemeData>(template, { strict: true }),
     stylesheet,
-    shrinkTokens: template.includes('tokensFontSize'),
+    shrinkTokens: dataLayout === 'bars' || dataLayout.startsWith('service-') || template.includes('tokensFontSize'),
+    width, height,
   });
 }
+
+export function unregisterTheme(id: string) { themes.delete(id); }
 
 let gate = Promise.resolve();
 function enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -58,7 +64,8 @@ function surface(width: number, height: number) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext('2d', { alpha: false });
+  // Output reads pixels on every frame; keep the raster backend stable across readbacks.
+  const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
   if (!context) throw new Error('Canvas 2D is unavailable');
   return { canvas, context };
 }
@@ -80,22 +87,27 @@ export async function startThemeRenderer() {
   let requested = false;
   let completedID = 0;
 
-  async function draw(themeId: string, data: ThemeData, withJpeg: boolean, shiftX = 0, shiftY = 0) {
+  async function draw(themeId: string, data: ThemeData, outputFormat?: string, shiftX = 0, shiftY = 0, reverse180 = false) {
     // Subscribe first so a failed initial asset request can be retried by the next frame.
     if (icons === undefined) {
       [icons] = await Promise.all([Display.AgentIcons(), document.fonts.load('500 22px "Yu Gothic"'), document.fonts.load('700 42px "Yu Gothic"')]);
     }
     const theme = themes.get(themeId);
     if (!theme) throw new Error(`Unknown display theme: ${themeId}`);
+    const { width, height } = theme;
+    if (drawing.canvas.width !== width || drawing.canvas.height !== height) { drawing.canvas.width = width; drawing.canvas.height = height; }
     const view = structuredClone(data);
     // Bars keep the existing shrinking rule for large token totals.
     if (theme.shrinkTokens) {
-      for (const token of view.tokens!) {
-        let size = 42;
-        while (size > 20) {
+      const service = view.service;
+      const tokens = service?.tokens ?? view.tokens ?? [];
+      const available = service ? service.both && width > height ? (width - 24) * 0.42 - 20 : width - 44 : 290;
+      for (const token of tokens) {
+        let size = service ? service.both && width < height ? 20 : 24 : 42;
+        while (size > (service ? 1 : 20)) {
           drawing.context.font = `700 ${size}px "Yu Gothic"`;
-          if (drawing.context.measureText(token.tokensText).width <= 290) break;
-          size -= 2;
+          if (Math.max(drawing.context.measureText(token.tokensText).width, service ? drawing.context.measureText(token.costText).width : 0) <= available) break;
+          size -= service ? 1 : 2;
         }
         token.tokensFontSize = size;
       }
@@ -111,33 +123,36 @@ export async function startThemeRenderer() {
     }
     const namespace = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(namespace, 'svg');
-    svg.setAttribute('width', '1920');
-    svg.setAttribute('height', '462');
-    svg.setAttribute('viewBox', '0 0 1920 462');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     const style = document.createElementNS(namespace, 'style');
     style.textContent = theme.stylesheet;
     const foreignObject = document.createElementNS(namespace, 'foreignObject');
-    foreignObject.setAttribute('width', '1920');
-    foreignObject.setAttribute('height', '462');
+    foreignObject.setAttribute('width', String(width));
+    foreignObject.setAttribute('height', String(height));
     foreignObject.append(document.importNode(parsed.body, true));
     svg.append(style, foreignObject);
     const image = new Image();
     image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
     await image.decode();
     drawing.context.fillStyle = '#000';
-    drawing.context.fillRect(0, 0, 1920, 462);
+    drawing.context.fillRect(0, 0, width, height);
     drawing.context.drawImage(image, 0, 0);
     let jpeg = '';
-    if (withJpeg) {
+    if (outputFormat) {
+      const jpegOutput = outputFormat === 'jpeg';
+      rotated.canvas.width = jpegOutput ? height : width;
+      rotated.canvas.height = jpegOutput ? width : height;
       rotated.context.setTransform(1, 0, 0, 1, 0, 0);
-      rotated.context.translate(462, 0);
-      rotated.context.rotate(Math.PI / 2);
+      if (jpegOutput) { rotated.context.translate(height, 0); rotated.context.rotate(Math.PI / 2); }
+      else if (reverse180) { rotated.context.translate(width, height); rotated.context.rotate(Math.PI); }
       // The gap the shift leaves is filled with the background, which is the colour of the image's corner.
       const [r, g, b] = drawing.context.getImageData(0, 0, 1, 1).data;
       rotated.context.fillStyle = `rgb(${r}, ${g}, ${b})`;
-      rotated.context.fillRect(0, 0, 1920, 1920);
+      rotated.context.fillRect(-width, -height, width * 3, height * 3);
       rotated.context.drawImage(drawing.canvas, shiftX, shiftY);
-      jpeg = encode(rotated.canvas, 'image/jpeg');
+      jpeg = encode(rotated.canvas, jpegOutput ? 'image/jpeg' : 'image/png');
     }
     const png = encode(drawing.canvas, 'image/png');
     image.removeAttribute('src');
@@ -148,13 +163,14 @@ export async function startThemeRenderer() {
     const snapshot = structuredClone(request.data);
     latest = snapshot;
     for (const listener of themeDataListeners) listener();
-    const frame = await enqueue(() => draw(request.theme, snapshot, true, request.shiftX, request.shiftY));
+    const frame = await enqueue(() => draw(request.theme, snapshot, request.outputFormat, request.shiftX, request.shiftY, request.reverse180));
     await Display.CompleteFrame(request.id, frame.png, frame.jpeg, '');
   }
 
   renderPreview = (themeId: string) => enqueue(async () => {
     if (!latest) throw new Error('No display image yet');
-    const frame = await draw(themeId, latest, false);
+    const data = await Display.ThemePreview(themeId);
+    const frame = await draw(themeId, data);
     return `data:image/png;base64,${frame.png}`;
   });
 
@@ -163,6 +179,7 @@ export async function startThemeRenderer() {
     if (rendering) return;
     rendering = true;
     try {
+      await loadStyleCatalog();
       while (requested) {
         requested = false;
         const request = await Display.RenderRequest();
@@ -181,6 +198,7 @@ export async function startThemeRenderer() {
 
   const schedule = () => { void pump().catch(reportFrontendError); };
   const unsubscribe = Events.On('display:render-requested', schedule);
+  const catalogChanged = Events.On('styles:changed', () => { invalidateStyleCatalog(); schedule(); });
   schedule();
-  if (import.meta.hot) import.meta.hot.dispose(unsubscribe);
+  if (import.meta.hot) import.meta.hot.dispose(() => { unsubscribe(); catalogChanged(); });
 }

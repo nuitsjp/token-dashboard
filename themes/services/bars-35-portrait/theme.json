@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "bars-35-portrait",
+  "name": "Bars 3.5\" Portrait",
+  "width": 320,
+  "height": 480,
+  "dataLayout": "service-bars",
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}

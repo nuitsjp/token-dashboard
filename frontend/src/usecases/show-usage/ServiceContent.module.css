@@ -1,0 +1,8 @@
+.section { container-type: inline-size; flex-shrink: 0; }
+.summary { cursor: pointer; font-weight: 600; }
+.summary:focus-visible { outline: 2px solid var(--mantine-color-violet-4); outline-offset: 4px; }
+.grid { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--mantine-color-dark-7); border: 1px solid var(--mantine-color-dark-4); border-radius: 10px; min-width: 0; }
+.name { overflow-wrap: anywhere; min-width: 0; }
+.card[data-enabled='false'] .name { color: var(--mantine-color-dark-3); }
+@container (max-width: 659px) { .grid { grid-template-columns: minmax(0, 1fr); } }

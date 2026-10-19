@@ -5,6 +5,7 @@ import { getLimits, limitsKey, subscribePreview, useSetShown } from '../../featu
 import { SwitchButton } from '../../shared/SwitchButton';
 import { ErrorNotice } from '../../shared/ErrorNotice';
 import styles from './UsageLimitSelect.module.css';
+import { useSettingsDraft } from '../configure-hub/SettingsDraft';
 
 // The bar colours follow the colours of the drawn image: below 25% is bad, up to 40% is a warning.
 const level = (percent: number) => percent < 25 ? 'bad' : percent <= 40 ? 'warn' : 'ok';
@@ -12,12 +13,13 @@ const level = (percent: number) => percent < 25 ? 'bad' : percent <= 40 ? 'warn'
 // Chooses which contracts and windows are drawn. A choice applies at once, so the preview above shows
 // the result. A contract is on when all its windows are, and its switch changes all of them.
 export function UsageLimitSelect() {
+  const serviceLayout = useSettingsDraft()?.serviceLayout ?? false;
   const client = useQueryClient();
   const limits = useQuery(getLimits());
   const setShown = useSetShown();
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: limitsKey })), [client]);
   const contracts = limits.data ?? [];
-  return <Card withBorder padding="md" className={styles.panel}>
+  return <Card withBorder padding="md" className={styles.panel} data-service-layout={serviceLayout}>
     <Title order={4} mb="sm">Usage Limits</Title>
     <ErrorNotice error={limits.error ?? setShown.error} />
     {contracts.length === 0
@@ -31,8 +33,8 @@ export function UsageLimitSelect() {
           return <div key={windows[0].key} className={styles.card} data-state={state}>
             <div className={styles.head}>
               <div className={styles.title}><Text fw={600} size="sm">{contract.provider}</Text><Text size="xs" c="dimmed">{contract.plan}</Text></div>
-              <SwitchButton role="checkbox" label={label} checked={state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'}
-                onClick={() => setShown.mutate({ keys: windows.map(w => w.key), shown: state !== 'all' })} />
+              {!serviceLayout && <SwitchButton role="checkbox" label={label} checked={state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false'}
+                onClick={() => setShown.mutate({ keys: windows.map(w => w.key), shown: state !== 'all' })} />}
             </div>
             <div className={styles.chips}>
               {windows.map(w => <button key={w.key} type="button" role="checkbox" aria-label={`${label} ${w.name}`} aria-checked={w.shown}

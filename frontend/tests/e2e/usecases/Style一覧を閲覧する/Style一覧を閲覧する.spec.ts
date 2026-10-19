@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { saveLargeDisplayFixture, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 
@@ -55,6 +55,7 @@ function definedStyles() {
   return [
     { name: 'Gauges', builtin: true },
     { name: 'Bars', builtin: true },
+    ...['Bars 3.5" Landscape', 'Bars 3.5" Portrait', 'Gauges 3.5" Landscape', 'Gauges 3.5" Portrait'].map(name => ({ name, builtin: true })),
     ...extras.map(style => ({ name: style.name, builtin: false })),
   ];
 }
@@ -88,6 +89,7 @@ async function cards(page: Page) {
 test('定義された表示スタイルを、現在の表示を変えずに見比べる', async ({ page }) => {
   test.setTimeout(180_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-styles-e2e-'));
+  saveLargeDisplayFixture(dataDir);
   const hub = await startHub();
   const server = await startServer(dataDir, 34130, shortIntervals);
   const file = () => JSON.parse(readFileSync(join(dataDir, 'settings.json'), 'utf8'));
@@ -125,15 +127,15 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       await expect(page.getByRole('heading', { name: 'Styles' })).toBeVisible();
       const heading = await page.getByRole('heading', { name: 'Styles' }).boundingBox();
       expect(heading!.height).toBeGreaterThan(20);
-      await expect.poll(() => cards(page)).toEqual(['Gauges Built-in In use', 'Bars Built-in']);
+      await expect.poll(() => cards(page)).toEqual(definedStyles().map(style => `${style.name} Built-in${style.name === 'Gauges' ? ' In use' : ''}`));
       for (const name of ['Gauges', 'Bars']) {
-        const image = page.getByRole('article', { name }).getByRole('img', { name: `${name} preview` });
+        const image = page.getByRole('article', { name, exact: true }).getByRole('img', { name: `${name} preview` });
         await expect.poll(() => image.evaluate(img => {
           const element = img as HTMLImageElement;
           return [element.naturalWidth, element.naturalHeight];
         })).toEqual([1920, 462]);
-        await expect(page.getByRole('article', { name }).getByRole('button')).toHaveCount(0);
-        await expect(page.getByRole('article', { name }).getByRole('textbox')).toHaveCount(0);
+        await expect(page.getByRole('article', { name, exact: true }).getByRole('button')).toHaveCount(0);
+        await expect(page.getByRole('article', { name, exact: true }).getByRole('textbox')).toHaveCount(0);
       }
       await expect.poll(async () => (await preview(page, 'Gauges preview')).length).toBeGreaterThan(5000);
       await expect.poll(async () => (await preview(page, 'Bars preview')).length).toBeGreaterThan(5000);
@@ -147,7 +149,7 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       }, { timeout: 30_000 }).toEqual([[1920, 462], line, danger, line]);
       await expect(page.getByRole('alert')).toHaveCount(0);
     });
-    const labels = ['Gauges Built-in In use', 'Bars Built-in'];
+    const labels = definedStyles().map(style => `${style.name} Built-in${style.name === 'Gauges' ? ' In use' : ''}`);
     await test.step('手順2', async () => {
       const gaugesBefore = await preview(page, 'Gauges preview');
       const barsBefore = await preview(page, 'Bars preview');
@@ -167,14 +169,14 @@ test('定義された表示スタイルを、現在の表示を変えずに見�
       await page.getByRole('link', { name: 'Display' }).click();
       await page.getByRole('link', { name: 'Styles' }).click();
       await expect.poll(() => cards(page)).toEqual(expected);
-      await expect(page.getByRole('article', { name: 'Gauges' }).getByText('Built-in', { exact: true })).toBeVisible();
-      await expect(page.getByRole('article', { name: 'Bars' }).getByText('Built-in', { exact: true })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Gauges', exact: true }).getByText('Built-in', { exact: true })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Bars', exact: true }).getByText('Built-in', { exact: true })).toBeVisible();
     });
     await test.step('受け入れ条件', async () => {
       const defined = definedStyles();
       expect(await cards(page)).toEqual(defined.map(style => `${style.name}${style.builtin ? ' Built-in' : ''}${style.name === 'Gauges' ? ' In use' : ''}`));
       for (const style of defined) {
-        const article = page.getByRole('article', { name: style.name });
+        const article = page.getByRole('article', { name: style.name, exact: true });
         await expect(article.getByRole('button')).toHaveCount(0);
         await expect(article.getByRole('textbox')).toHaveCount(0);
         await expect(article.getByRole('checkbox')).toHaveCount(0);

@@ -39,6 +39,31 @@ func TestConvertTokscalePeriods(t *testing.T) {
 	}
 }
 
+func TestServiceAttributionPreservesMissingZeroAndExcludesReasoning(t *testing.T) {
+	var raw graph
+	if err := json.Unmarshal([]byte(`{"contributions":[
+ {"date":"2026-09-28","totals":{"cost":99},"clients":[{"client":"claude","tokens":{"input":10,"reasoning":999},"cost":0},{"client":"codex","cost":1.25}]},
+ {"date":"2026-09-01","clients":[{"client":"claude","tokens":{"input":100},"cost":2}]},
+ {"date":"2026-08-31","clients":[{"client":"claude","tokens":{"input":1000},"cost":3}]}]}`), &raw); err != nil {
+		t.Fatal(err)
+	}
+	periods := convertGraph(raw, time.Date(2026, 9, 28, 12, 0, 0, 0, time.Local))
+	for i, period := range []usage.Period{periods.Today, periods.Month, periods.AllTime} {
+		if got, want := period.Clients["claude"], []int64{10, 110, 1110}[i]; got != want {
+			t.Fatalf("period %d Claude tokens = %d, want %d", i, got, want)
+		}
+		if _, reported := period.Clients["codex"]; reported {
+			t.Fatal("missing tokens became reported zero")
+		}
+	}
+	if cost, reported := periods.Today.ClientCosts["claude"]; !reported || cost != 0 {
+		t.Fatal("reported zero cost was lost")
+	}
+	if periods.Today.ClientCosts["codex"] != 1.25 {
+		t.Fatal("cost-only attribution was lost")
+	}
+}
+
 func TestConvertTokscaleQuotas(t *testing.T) {
 	const input = `[
   {

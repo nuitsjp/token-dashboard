@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"token-monitor-turzx/internal/display"
 
 	"token-monitor-turzx/internal/fault"
 )
@@ -25,35 +26,47 @@ type manifest struct {
 	Name          string `json:"name"`
 	Width         int    `json:"width"`
 	Height        int    `json:"height"`
+	DataLayout    string `json:"dataLayout"`
 	Template      string `json:"template"`
 	Stylesheet    string `json:"stylesheet"`
 }
 
 // ImportDraft is a checked copy that is not yet part of the definitions.
 type ImportDraft struct {
-	Token string            `json:"token"`
-	ID    string            `json:"id"`
-	Name  string            `json:"name"`
-	Files map[string]string `json:"files"`
+	Width      int               `json:"width"`
+	Height     int               `json:"height"`
+	DataLayout string            `json:"dataLayout"`
+	Token      string            `json:"token"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Files      map[string]string `json:"files"`
 }
 
 // StoredStyle is one style already in the app.
 type StoredStyle struct {
-	ID    string            `json:"id"`
-	Name  string            `json:"name"`
-	Files map[string]string `json:"files"`
+	Width      int               `json:"width"`
+	Height     int               `json:"height"`
+	DataLayout string            `json:"dataLayout"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Files      map[string]string `json:"files"`
 }
 
 type staged struct {
-	id  string
-	dir string
+	id         string
+	dir        string
+	definition definition
 }
 
 type Service struct {
-	dir    string
-	logger *slog.Logger
-	mu     sync.Mutex
-	staged map[string]staged
+	dir         string
+	logger      *slog.Logger
+	mu          sync.Mutex
+	staged      map[string]staged
+	builtins    map[string]display.Theme
+	definitions map[string]definition
+	guardDelete func(string, func() error) error
+	changed     func()
 }
 
 func New(dir string, logger *slog.Logger) *Service {
@@ -85,7 +98,12 @@ func (s *Service) BeginImport(folder string, definedIDs []string) (draft ImportD
 		return ImportDraft{}, err
 	}
 	for _, id := range definedIDs {
-		if id == manifest.ID {
+		if strings.EqualFold(id, manifest.ID) {
+			return ImportDraft{}, duplicate()
+		}
+	}
+	for id := range s.builtins {
+		if strings.EqualFold(id, manifest.ID) {
 			return ImportDraft{}, duplicate()
 		}
 	}
@@ -94,6 +112,9 @@ func (s *Service) BeginImport(folder string, definedIDs []string) (draft ImportD
 	}
 	if !oneDirectoryName(manifest.ID) {
 		return ImportDraft{}, s.copyFailed(os.ErrInvalid)
+	}
+	if err := s.loadDefinitions(); err != nil {
+		return ImportDraft{}, err
 	}
 	token, err := newToken()
 	if err != nil {
@@ -107,17 +128,35 @@ func (s *Service) BeginImport(folder string, definedIDs []string) (draft ImportD
 		os.RemoveAll(dir)
 		return ImportDraft{}, s.copyFailed(err)
 	}
+	copied, err := readManifest(dir)
+	if err != nil || copied != manifest {
+		os.RemoveAll(dir)
+		return ImportDraft{}, invalid()
+	}
 	files, err := readTree(dir)
 	if err != nil {
 		os.RemoveAll(dir)
 		return ImportDraft{}, s.copyFailed(err)
 	}
-	s.staged[token] = staged{id: manifest.ID, dir: dir}
-	return ImportDraft{Token: token, ID: manifest.ID, Name: manifest.Name, Files: files}, nil
+	definition, err := inspectDefinition(dir, manifest)
+	if err != nil {
+		os.RemoveAll(dir)
+		return ImportDraft{}, invalid()
+	}
+	s.staged[token] = staged{id: manifest.ID, dir: dir, definition: definition}
+	return ImportDraft{Token: token, ID: manifest.ID, Name: manifest.Name, Width: manifest.Width, Height: manifest.Height, DataLayout: manifest.DataLayout, Files: files}, nil
 }
 
 // FinishImport moves a checked copy into the definitions.
 func (s *Service) FinishImport(token string) error {
+	err := s.finishImport(token)
+	if err == nil && s.changed != nil {
+		s.changed()
+	}
+	return err
+}
+
+func (s *Service) finishImport(token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	item, ok := s.staged[token]
@@ -126,14 +165,24 @@ func (s *Service) FinishImport(token string) error {
 	}
 	delete(s.staged, token)
 	if s.stored(item.id) {
+		s.definitions = nil
 		os.RemoveAll(item.dir)
 		return duplicate()
+	}
+	if err := s.loadDefinitions(); err != nil {
+		os.RemoveAll(item.dir)
+		return err
+	}
+	if err := item.definition.check(item.dir); err != nil {
+		os.RemoveAll(item.dir)
+		return invalid()
 	}
 	dest := filepath.Join(s.dir, item.id)
 	if err := os.Rename(item.dir, dest); err != nil {
 		os.RemoveAll(item.dir)
 		return s.copyFailed(err)
 	}
+	s.definitions[item.id] = item.definition
 	return nil
 }
 
@@ -154,10 +203,30 @@ func (s *Service) CancelImport(token string) error {
 
 // Delete removes a style added to the app. Built-in styles are not stored here.
 func (s *Service) Delete(id string) error {
+	action := func() error { return s.delete(id) }
+	var err error
+	if s.guardDelete != nil {
+		err = s.guardDelete(id, action)
+	} else {
+		err = action()
+	}
+	if err == nil && s.changed != nil {
+		s.changed()
+	}
+	return err
+}
+
+func (s *Service) delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !oneDirectoryName(id) || id == incomingDir {
 		return s.deleteFailed(os.ErrInvalid)
+	}
+	if _, builtin := s.builtins[id]; builtin {
+		return s.deleteFailed(os.ErrInvalid)
+	}
+	if err := s.loadDefinitions(); err != nil {
+		return err
 	}
 	src := filepath.Join(s.dir, id)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
@@ -174,6 +243,7 @@ func (s *Service) Delete(id string) error {
 	if err := os.Rename(src, trash); err != nil {
 		return s.deleteFailed(err)
 	}
+	delete(s.definitions, id)
 	if err := os.RemoveAll(trash); err != nil {
 		s.logger.Warn("style_delete_leftover", "cause", err)
 	}
@@ -190,28 +260,21 @@ func (s *Service) List() ([]StoredStyle, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cleanup()
-	entries, err := os.ReadDir(s.dir)
-	if os.IsNotExist(err) {
-		return []StoredStyle{}, nil
-	}
-	if err != nil {
-		return nil, s.copyFailed(err)
+	if err := s.loadDefinitions(); err != nil {
+		return nil, err
 	}
 	list := []StoredStyle{}
-	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == incomingDir {
-			continue
+	for id, definition := range s.definitions {
+		dir := filepath.Join(s.dir, id)
+		if err := definition.check(dir); err != nil {
+			return nil, unavailable()
 		}
-		dir := filepath.Join(s.dir, entry.Name())
-		manifest, err := readManifest(dir)
-		if err != nil || manifest.ID != entry.Name() {
-			return nil, invalid()
-		}
+		manifest := definition.manifest
 		files, err := readTree(dir)
 		if err != nil {
 			return nil, s.copyFailed(err)
 		}
-		list = append(list, StoredStyle{ID: manifest.ID, Name: manifest.Name, Files: files})
+		list = append(list, StoredStyle{ID: manifest.ID, Name: manifest.Name, Width: manifest.Width, Height: manifest.Height, DataLayout: manifest.DataLayout, Files: files})
 	}
 	return list, nil
 }
@@ -252,7 +315,23 @@ func readManifest(dir string) (manifest, error) {
 		return manifest{}, invalid()
 	}
 	var value manifest
-	if json.Unmarshal(data, &value) != nil || value.FormatVersion != 1 || value.Width != 1920 || value.Height != 462 || strings.TrimSpace(value.ID) == "" || strings.TrimSpace(value.Name) == "" {
+	if json.Unmarshal(data, &value) != nil || value.FormatVersion != 1 || strings.TrimSpace(value.ID) == "" || strings.TrimSpace(value.Name) == "" {
+		return manifest{}, invalid()
+	}
+	if value.Width == 1920 && value.Height == 462 {
+		if value.DataLayout == "" {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(data, &fields) != nil || fields["dataLayout"] != nil {
+				return manifest{}, invalid()
+			}
+			value.DataLayout = "gauges"
+		}
+		if value.DataLayout != "gauges" && value.DataLayout != "bars" {
+			return manifest{}, invalid()
+		}
+	} else if (value.Width == 480 && value.Height == 320 || value.Width == 320 && value.Height == 480) && (value.DataLayout == "service-gauges" || value.DataLayout == "service-bars") {
+		// Service layouts have their own dimensions and pagination contract.
+	} else {
 		return manifest{}, invalid()
 	}
 	if err := directFile(dir, value.Template, ".hbs"); err != nil {

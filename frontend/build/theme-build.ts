@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import Handlebars from 'handlebars';
@@ -9,8 +9,9 @@ type Manifest = {
   formatVersion: 1;
   id: string;
   name: string;
-  width: 1920;
-  height: 462;
+  width: number;
+  height: number;
+  dataLayout?: 'gauges' | 'bars' | 'service-gauges' | 'service-bars';
   template: string;
   stylesheet: string;
 };
@@ -41,14 +42,18 @@ function themeFile(directory: string, value: unknown, extension: string) {
 
 export function readThemeManifests(root: string): Theme[] {
   const ids = new Set<string>();
-  return readdirSync(root, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && !['node_modules', 'preview', 'benchmark'].includes(entry.name))
-    .map(entry => {
-      const directory = join(root, entry.name);
+  const group = join(root, 'services');
+  const directories = readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && !['node_modules', 'preview', 'benchmark', 'services'].includes(entry.name))
+    .map(entry => join(root, entry.name));
+  if (existsSync(group)) directories.push(...readdirSync(group, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => join(group, entry.name)));
+  return directories.map(directory => {
       const path = join(directory, 'theme.json');
       const manifest: Manifest = JSON.parse(readFileSync(path, 'utf8'));
       if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
-        || manifest.formatVersion !== 1 || manifest.width !== 1920 || manifest.height !== 462
+        || manifest.formatVersion !== 1 || !((manifest.width === 1920 && manifest.height === 462)
+          || ((manifest.width === 480 && manifest.height === 320) || (manifest.width === 320 && manifest.height === 480)) && ['service-gauges', 'service-bars'].includes(manifest.dataLayout ?? ''))
+        || manifest.dataLayout !== undefined && !['gauges', 'bars', 'service-gauges', 'service-bars'].includes(manifest.dataLayout)
         || typeof manifest.id !== 'string' || !manifest.id.trim()
         || typeof manifest.name !== 'string' || !manifest.name.trim()) {
         throw new Error(`Invalid display theme manifest: ${path}`);

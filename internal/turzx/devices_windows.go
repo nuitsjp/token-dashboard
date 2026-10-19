@@ -59,13 +59,20 @@ func List() ([]Device, error) {
 }
 
 func interfacePaths() ([]string, error) {
+	return deviceInterfacePaths(&usbDeviceInterface, nil)
+}
+
+func deviceInterfacePaths(class *syscall.GUID, id *uint16) ([]string, error) {
 	for {
 		var size uint32
-		if r, _, _ := procListSize.Call(uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(&usbDeviceInterface)), 0, 0); r != crSuccess {
+		if r, _, _ := procListSize.Call(uintptr(unsafe.Pointer(&size)), uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(id)), 0); r != crSuccess {
 			return nil, fmt.Errorf("CM_Get_Device_Interface_List_SizeW: CONFIGRET=0x%X", r)
 		}
 		buffer := make([]uint16, size)
-		r, _, _ := procList.Call(uintptr(unsafe.Pointer(&usbDeviceInterface)), 0, uintptr(unsafe.Pointer(&buffer[0])), uintptr(size), 0)
+		if size == 0 {
+			return nil, nil
+		}
+		r, _, _ := procList.Call(uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(id)), uintptr(unsafe.Pointer(&buffer[0])), uintptr(size), 0)
 		if r == crBufferSmall {
 			continue // The list changed between the two calls.
 		}
@@ -79,9 +86,7 @@ func interfacePaths() ([]string, error) {
 				continue
 			}
 			if i > start {
-				if path := syscall.UTF16ToString(buffer[start:i]); strings.Contains(strings.ToLower(path), target) {
-					paths = append(paths, path)
-				}
+				paths = append(paths, syscall.UTF16ToString(buffer[start:i]))
 			}
 			start = i + 1
 		}

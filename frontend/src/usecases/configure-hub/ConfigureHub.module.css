@@ -1,4 +1,7 @@
 .row { display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: center; padding: 14px 0; border-top: 1px solid var(--mantine-color-dark-5); }
 .row:first-of-type { border-top: 0; }
 .bar { border-top: 1px solid var(--mantine-color-dark-5); }
+.styleInput:not(:disabled) { color: var(--mantine-color-text); background: var(--mantine-color-dark-6); border-color: var(--mantine-color-dark-3); cursor: pointer; }
+.styleInput:not(:disabled):hover { border-color: var(--mantine-color-violet-4); }
+.styleInput:not(:disabled):focus { border-color: var(--mantine-color-violet-4); outline: 2px solid var(--mantine-color-violet-4); outline-offset: 2px; }
 @media(max-width: 760px) { .row { grid-template-columns: 1fr; gap: 8px; } }

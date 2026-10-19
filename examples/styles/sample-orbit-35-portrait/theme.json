@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "id": "sample-orbit-35-portrait",
+  "name": "Orbit Gauges 3.5\" Portrait",
+  "width": 320,
+  "height": 480,
+  "dataLayout": "service-gauges",
+  "template": "template.hbs",
+  "stylesheet": "style.css"
+}

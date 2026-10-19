@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { startServer } from '../../support/server';
+import { saveLargeDisplayFixture, startServer } from '../../support/server';
 import { startHub } from '../../support/hub';
 import { shortIntervals } from '../../support/local';
 import { measure } from '../../support/shift';
@@ -156,6 +156,7 @@ test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の�
   test.setTimeout(90_000);
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-canvas-e2e-'));
   const hub = await startHub();
+  saveLargeDisplayFixture(dataDir);
   const server = await startServer(dataDir, 34129, shortIntervals);
   const frames = new Map<string, { png: string; jpeg: string }>();
   let assetsFailed = false;
@@ -216,7 +217,7 @@ test('実描画のJPEGがPNGと時計回り90度で対応し、描画要求の�
     await expect.poll(() => injected).toBe(true);
     const previous = await preview(page);
     await page.getByRole('textbox', { name: 'Display style' }).click();
-    await page.getByRole('option', { name: 'Bars' }).click();
+    await page.getByRole('option', { name: 'Bars', exact: true }).click();
     expect(await preview(page)).toBe(previous);
     failRequest = false;
     await expect.poll(async () => (await colours(page, await preview(page))).divider, { timeout: 20_000 }).toEqual(line);
@@ -234,6 +235,7 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
   const dataDir = mkdtempSync(join(tmpdir(), 'turzx-bars-e2e-'));
   const hub = await startHub();
   // The server redraws every second instead of every minute.
+  saveLargeDisplayFixture(dataDir);
   let server = await startServer(dataDir, 34123, shortIntervals);
   // The page is replaced after the window is closed, so the locator is made when it is used.
   const style = () => page.getByRole('textbox', { name: 'Display style' });
@@ -278,9 +280,9 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       // The choice is applied at once: no Save button, no message, and the Hub is not interrupted.
       await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
       await style().click();
-      await page.getByRole('option', { name: 'Bars' }).click();
+      await page.getByRole('option', { name: 'Bars', exact: true }).click();
       await expect(page.getByText('Saved.')).toHaveCount(0);
-      await expect.poll(() => file().limitStyle).toBe('Bars');
+      await expect.poll(() => file().limitStyle).toBe('bars');
       // A previous frame may still be in flight; the renderer allows up to 10s per frame.
       await expect.poll(async () => colours(page, await preview(page)), { timeout: 20_000 }).toMatchObject({
         divider: line,
@@ -313,7 +315,7 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       expect((await colours(page, await preview(page))).alphaBarStart).toEqual(danger);
     });
     await test.step('受け入れ条件', async () => {
-      // Only Gauges and Bars can be chosen.
+      // The saved large output offers the two compatible large styles, even while disconnected.
       await style().click();
       await expect(page.getByRole('option')).toHaveText(['Gauges', 'Bars']);
       await page.keyboard.press('Escape');
@@ -343,9 +345,9 @@ test('Display style を Bars に切り替えると、保存して Tokens の列�
       expect(ordered.fourthColumnTop).toEqual(normal);
       // Choosing Gauges again saves it, draws the gauges and leaves the connection as it was.
       await style().click();
-      await page.getByRole('option', { name: 'Gauges' }).click();
+      await page.getByRole('option', { name: 'Gauges', exact: true }).click();
       await expect.poll(async () => (await colours(page, await preview(page))).firstColumnTop).not.toEqual(danger);
-      await expect.poll(() => file().limitStyle).toBe('Gauges');
+      await expect.poll(() => file().limitStyle).toBe('gauges');
       expect(file().source).toBe('Hub');
       expect(file().connection).toBeTruthy();
     });

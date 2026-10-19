@@ -1,4 +1,7 @@
 .panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.panel[data-service-layout='true'] { flex: none; container-type: inline-size; }
+.panel[data-service-layout='true'] .scroll { overflow: visible; }
+.panel[data-service-layout='true'] .grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 .scroll { flex: 1; min-height: 0; overflow-y: auto; }
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .card { background: var(--mantine-color-dark-7); border: 1px solid var(--mantine-color-dark-4); border-radius: 10px; padding: 12px; transition: opacity .15s; }
