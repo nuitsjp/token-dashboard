@@ -2,7 +2,7 @@ import Handlebars from 'handlebars/runtime';
 import HandlebarsCompiler from 'handlebars';
 import { Events } from '@wailsio/runtime';
 import * as Display from '@bindings/token-monitor-turzx/internal/display/service';
-import { invalidateStyleCatalog, loadStyleCatalog } from '../styles/catalog';
+import { invalidateStyleCatalog, loadDisplayStyle } from '../styles/catalog';
 import type { FrameRequest, ThemeData } from '@bindings/token-monitor-turzx/internal/display/models';
 import { reportFrontendError } from '../application/queries';
 
@@ -179,12 +179,12 @@ export async function startThemeRenderer() {
     if (rendering) return;
     rendering = true;
     try {
-      await loadStyleCatalog();
       while (requested) {
         requested = false;
         const request = await Display.RenderRequest();
         if (!request || request.id === completedID) continue;
         try {
+          await loadDisplayStyle(request.theme);
           await render(request);
         } catch (error) {
           await Display.CompleteFrame(request.id, '', '', String(error));

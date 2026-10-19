@@ -11,9 +11,10 @@ type Manifest = { id?: string; name?: string };
 const manifests = import.meta.glob<Manifest>(['../../../../themes/*/theme.json', '../../../../themes/services/*/theme.json'], { eager: true, import: 'default' });
 const invalid = { code: 'INVALID', message: 'This folder is not a valid style.' };
 let loading: Promise<StyleDefinition[]> | undefined;
+const loadingDisplayStyles = new Map<string, Promise<void>>();
 let revision = 0;
 let registered = new Set<string>();
-export function invalidateStyleCatalog() { revision++; loading = undefined; }
+export function invalidateStyleCatalog() { revision++; loading = undefined; loadingDisplayStyles.clear(); }
 
 function definitions(value: unknown): StyleDefinition[] {
   if (!Array.isArray(value)) throw new Error('Style catalog is unavailable');
@@ -43,6 +44,28 @@ async function registerStored(value: ThemeFiles) {
   const prepared = prepareTheme(value, icons);
   registerTheme(prepared.id, prepared.template, prepared.stylesheet, prepared.width, prepared.height, prepared.dataLayout);
   return { id: prepared.id, name: prepared.name };
+}
+
+// Resident output must not depend on the files of unrelated styles.
+export async function loadDisplayStyle(id: string): Promise<void> {
+  if (compiledStyles().some(style => style.id === id)) return;
+  let loading = loadingDisplayStyles.get(id);
+  if (!loading) {
+    const current = revision;
+    loading = readDisplayStyle(id, current).catch(error => {
+      if (current === revision) loadingDisplayStyles.delete(id);
+      throw error;
+    });
+    loadingDisplayStyles.set(id, loading);
+  }
+  return loading;
+}
+
+async function readDisplayStyle(id: string, current: number): Promise<void> {
+  const [stored, icons] = await Promise.all([Styles.Read(id), Display.AgentIcons()]);
+  const prepared = prepareTheme(stored, icons);
+  if (current !== revision) return loadDisplayStyle(id);
+  registerTheme(prepared.id, prepared.template, prepared.stylesheet, prepared.width, prepared.height, prepared.dataLayout);
 }
 
 export async function deleteStyle(id: string): Promise<void> {
