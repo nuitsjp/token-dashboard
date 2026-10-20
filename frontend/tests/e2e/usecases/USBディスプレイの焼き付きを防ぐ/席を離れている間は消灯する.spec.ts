@@ -118,7 +118,8 @@ test('離席条件が成立している間は TURZX を消灯し、すべて解�
       signal(server.pid, 'unlock');
       await expect.poll(() => frames.length, { timeout: 15_000 }).toBeGreaterThan(2);
       expect((await measure(page, frames.slice(0, 1)))[0].shift).toEqual([0, 0]);
-      expect(await preview()).toBe(`data:image/png;base64,${frames[frames.length - 1].png}`);
+      // A new frame may arrive during preview navigation, so retry the complete comparison.
+      await expect.poll(async () => (await preview()) === `data:image/png;base64,${frames[frames.length - 1].png}`).toBe(true);
     });
     await test.step('手順5', async () => {
       // A display plugged in while away is switched off by the black image that the beat and a new usage
