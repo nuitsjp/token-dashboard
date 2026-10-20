@@ -196,3 +196,25 @@ CycleがOFFでも3.5インチは複数ページを巡回すること、1ペー�
 WebView2の自動確認は`WAILS_WEBVIEW_DEBUG_PORT`を指定し、Playwright CLIで`http://127.0.0.1:9347`のCDPへ接続します。
 デスクトップ画面のURLは`http://wails.localhost/`です。ブラウザー用サーバーではフォルダー選択とUSB出力を実行しません。
 通常起動は実処理を使います。固定の取り込み応答やブラウザー入力ダイアログへ切り替える処理はありません。
+
+<a id="blank-update-mock"></a>
+### 3.5インチの更新方式スイッチの配置を確認する
+
+`Blank on update`の配置確認は、既存のLocal用固定応答とサーバー起動を使います。
+PowerShellで次を実行します。
+
+```powershell
+$env:VITE_BLANK_UPDATE_MOCK = '1'
+try {
+    node scripts/run.mjs generate
+    npm --prefix frontend run build
+    node scripts/build.mjs server
+} finally {
+    Remove-Item Env:VITE_BLANK_UPDATE_MOCK
+}
+node scripts/mock-away-local.mjs
+```
+
+`http://127.0.0.1:34127/`のDisplay画面で、Rotate 180°の隣にあるスイッチの初期値がOFFで、マウスとキーボードで切り替えられることを確認します。
+スイッチの状態は画面内の真偽値で再現し、保存とUSB通信には接続しません。ページの再読み込みでOFFへ戻ります。通常ビルドではこの配置確認用スイッチを表示しません。
+終了は起動したターミナルでCtrl+Cを押します。固定応答と一時設定は既存スクリプトが作成し、終了時に削除します。
