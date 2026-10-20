@@ -22,7 +22,7 @@ func TestStyleCorrectionPreservesConnectionAndPreferencesAndCommitsOnce(t *testi
 			s, path := newService(t, &devices)
 			ConfigureDisplay(s, presentationThemes())
 			on := true
-			prefs := &display.Presentation{Reverse180: true, SkipFull5h: true, Services: map[string]map[string]display.ServiceContent{
+			prefs := &display.Presentation{Reverse180: true, BlankOnUpdate: true, SkipFull5h: true, Services: map[string]map[string]display.ServiceContent{
 				"Local": {"Claude": {Enabled: false, Content: "Tokens"}}, "Hub": {"Codex": {Enabled: true, Content: "Limits"}},
 			}}
 			if _, err := s.Save(SaveRequest{Source: "Hub", URL: "https://hub.example.com", Token: "retained-secret", LimitStyle: "Bars", Cycle: &on, CycleSeconds: 37, ServiceCycleSeconds: 7, AwayMinutes: 23, Presentation: prefs}); err != nil {
