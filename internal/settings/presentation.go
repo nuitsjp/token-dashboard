@@ -72,7 +72,7 @@ func presentationOf(saved file) *display.Presentation {
 
 func mergePresentation(saved, requested *display.Presentation) *display.Presentation {
 	next := presentationOf(file{Presentation: saved})
-	next.Reverse180, next.SkipFull5h = requested.Reverse180, requested.SkipFull5h
+	next.Reverse180, next.BlankOnUpdate, next.SkipFull5h = requested.Reverse180, requested.BlankOnUpdate, requested.SkipFull5h
 	for source, services := range requested.Services {
 		if next.Services[source] == nil {
 			next.Services[source] = map[string]display.ServiceContent{}

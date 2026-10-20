@@ -197,24 +197,12 @@ WebView2の自動確認は`WAILS_WEBVIEW_DEBUG_PORT`を指定し、Playwright CL
 デスクトップ画面のURLは`http://wails.localhost/`です。ブラウザー用サーバーではフォルダー選択とUSB出力を実行しません。
 通常起動は実処理を使います。固定の取り込み応答やブラウザー入力ダイアログへ切り替える処理はありません。
 
-<a id="blank-update-mock"></a>
-### 3.5インチの更新方式スイッチの配置を確認する
+<a id="blank-update-audit"></a>
+### 3.5インチの更新方式を確認する
 
-`Blank on update`の配置確認は、既存のLocal用固定応答とサーバー起動を使います。
-PowerShellで次を実行します。
-
-```powershell
-$env:VITE_BLANK_UPDATE_MOCK = '1'
-try {
-    node scripts/run.mjs generate
-    npm --prefix frontend run build
-    node scripts/build.mjs server
-} finally {
-    Remove-Item Env:VITE_BLANK_UPDATE_MOCK
-}
-node scripts/mock-away-local.mjs
-```
-
-`http://127.0.0.1:34127/`のDisplay画面で、Rotate 180°の隣にあるスイッチの初期値がOFFで、マウスとキーボードで切り替えられることを確認します。
-スイッチの状態は画面内の真偽値で再現し、保存とUSB通信には接続しません。ページの再読み込みでOFFへ戻ります。通常ビルドではこの配置確認用スイッチを表示しません。
-終了は起動したターミナルでCtrl+Cを押します。固定応答と一時設定は既存スクリプトが作成し、終了時に削除します。
+デスクトップアプリを実Hubまたは実Localへ接続し、Displayで3.5インチ用スタイルを選びます。
+Rotate 180°の隣の`Blank on update`は、未設定ではOFFです。OFFでは消灯せず全画面を順に書き換えます。
+ONにすると消灯中に差分を転送し、完成後に点灯します。初回、再接続、寸法や反転の変更時は全画面を転送します。
+設定を切り替えてもページと巡回期限を維持し、アプリの再起動後も選択を保持することを確認します。
+9.2インチ用スタイルではスイッチを表示しません。
+保存失敗時は元の選択を保持し、エラーを表示します。配置確認用の固定状態と環境変数は使いません。

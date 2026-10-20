@@ -48,4 +48,4 @@ sequenceDiagram
 
 UC 固有の逸脱: なし
 
-3.5インチの更新方式スイッチの配置確認では、`ServiceContent`の`SwitchButton`が扱うON/OFFの契約を画面内の真偽値で再現する。`VITE_BLANK_UPDATE_MOCK=1`で明示的に有効化したビルドに限って表示し、保存処理やUSB送信を置き換えない。起動と終了は[配置確認の手順](../project.md#blank-update-mock)に従う。
+3.5インチの更新方式は、既存の表示設定保存で`presentation.blankOnUpdate`を保存し、同じ設定世代の送信処理へ渡す。切り替えによってページや巡回期限をリセットしない。

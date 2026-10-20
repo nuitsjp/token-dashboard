@@ -144,7 +144,7 @@ func (o *Output) Run(ctx context.Context) {
 				continue
 			}
 			if err == nil {
-				err = conn.SendRGB565(rgb, request.Width, request.Height, request.Reverse180)
+				err = conn.SendRGB565(rgb, request.Width, request.Height, request.Reverse180, config.Presentation.BlankOnUpdate)
 			}
 		} else {
 			err = fmt.Errorf("unsupported TURZX image format")
