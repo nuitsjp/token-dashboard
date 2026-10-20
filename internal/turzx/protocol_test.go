@@ -5,9 +5,53 @@ import (
 	"crypto/cipher"
 	"crypto/des"
 	"encoding/binary"
+	"image"
+	"reflect"
 	"testing"
 	"time"
 )
+
+func TestRGB565Regions(t *testing.T) {
+	const width, height = 4, 5
+	data := make([]byte, width*height*2)
+
+	t.Run("nil previous covers full screen", func(t *testing.T) {
+		got := rgb565Regions(data, nil, width, height)
+		want := []image.Rectangle{image.Rect(0, 0, width, height)}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("regions = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("same image is empty", func(t *testing.T) {
+		previous := append([]byte(nil), data...)
+		if got := rgb565Regions(data, previous, width, height); len(got) != 0 {
+			t.Fatalf("regions = %v, want no regions", got)
+		}
+	})
+
+	t.Run("changed row runs use union bounds and detect second byte", func(t *testing.T) {
+		previous := make([]byte, len(data))
+		changed := append([]byte(nil), previous...)
+		setByte := func(x, y, byteOffset int, value byte) {
+			changed[(y*width+x)*2+byteOffset] = value
+		}
+		setByte(1, 0, 0, 1)
+		setByte(0, 1, 1, 1)
+		setByte(3, 1, 0, 2)
+		setByte(2, 3, 0, 3)
+		setByte(1, 4, 1, 2)
+
+		got := rgb565Regions(changed, previous, width, height)
+		want := []image.Rectangle{
+			image.Rect(0, 0, 4, 2),
+			image.Rect(1, 3, 3, 5),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("regions = %v, want %v", got, want)
+		}
+	})
+}
 
 func TestRevAFullScreenBitmapCoordinates(t *testing.T) {
 	for _, tc := range []struct {
@@ -20,6 +64,26 @@ func TestRevAFullScreenBitmapCoordinates(t *testing.T) {
 		if got := revACommand(197, 0, 0, tc.width-1, tc.height-1); !bytes.Equal(got, tc.packet) {
 			t.Fatalf("%dx%d bitmap header: % X", tc.width, tc.height, got)
 		}
+	}
+}
+
+func TestRevAOrientation(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		width, height int
+		reverse180    bool
+		packet        []byte
+	}{
+		{"portrait", 320, 480, false, []byte{0, 0, 0, 0, 0, 121, 100, 1, 64, 1, 224, 0, 0, 0, 0, 0}},
+		{"reverse portrait", 320, 480, true, []byte{0, 0, 0, 0, 0, 121, 101, 1, 64, 1, 224, 0, 0, 0, 0, 0}},
+		{"landscape", 480, 320, false, []byte{0, 0, 0, 0, 0, 121, 102, 1, 224, 1, 64, 0, 0, 0, 0, 0}},
+		{"reverse landscape", 480, 320, true, []byte{0, 0, 0, 0, 0, 121, 103, 1, 224, 1, 64, 0, 0, 0, 0, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := revAOrientation(tc.width, tc.height, tc.reverse180); !bytes.Equal(got, tc.packet) {
+				t.Fatalf("orientation header: % X, want % X", got, tc.packet)
+			}
+		})
 	}
 }
 

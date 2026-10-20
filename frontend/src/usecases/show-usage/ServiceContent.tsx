@@ -22,10 +22,13 @@ export function ServiceContent() {
   useEffect(() => subscribePreview(() => void client.invalidateQueries({ queryKey: servicesKey })), [client]);
   if (!draft?.serviceLayout || !draft.saved.presentation) return null;
   const presentation = draft.saved.presentation;
+  const theme = draft.saved.themes?.find(theme => theme.id === draft.style);
+  const small = theme && ((theme.width === 480 && theme.height === 320) || (theme.width === 320 && theme.height === 480));
   return <Card withBorder padding="md" className={styles.section}>
     <Stack gap="md">
       <Group gap="xl">
         <Group gap="sm"><Text size="sm">Rotate 180°</Text><SwitchButton role="switch" label="Rotate 180°" checked={presentation.reverse180 ? 'true' : 'false'} disabled={draft.saving} onClick={() => draft.setPresentation({ reverse180: !presentation.reverse180 })} /></Group>
+        {small && <Group gap="sm"><Text size="sm">Blank on update</Text><SwitchButton role="switch" label="Blank on update" checked={presentation.blankOnUpdate ? 'true' : 'false'} disabled={draft.saving} onClick={() => draft.setPresentation({ blankOnUpdate: !presentation.blankOnUpdate })} /></Group>}
         <Group gap="sm"><Text size="sm">Skip full 5h or missing limits</Text><SwitchButton role="switch" label="Skip full 5h or missing limits" checked={presentation.skipFull5h ? 'true' : 'false'} disabled={draft.saving} onClick={() => draft.setPresentation({ skipFull5h: !presentation.skipFull5h })} /></Group>
       </Group>
       <ErrorNotice error={services.error} />

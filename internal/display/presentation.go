@@ -68,9 +68,10 @@ func (c *ServiceContent) UnmarshalJSON(data []byte) error {
 
 // Presentation is the runtime contract; its disk representation is agreed separately.
 type Presentation struct {
-	Reverse180 bool                                 `json:"reverse180"`
-	SkipFull5h bool                                 `json:"skipFull5h"`
-	Services   map[string]map[string]ServiceContent `json:"services"`
+	Reverse180    bool                                 `json:"reverse180"`
+	BlankOnUpdate bool                                 `json:"blankOnUpdate"`
+	SkipFull5h    bool                                 `json:"skipFull5h"`
+	Services      map[string]map[string]ServiceContent `json:"services"`
 }
 
 func ClonePresentation(value *Presentation) *Presentation {

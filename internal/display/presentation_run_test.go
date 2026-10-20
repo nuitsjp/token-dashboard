@@ -130,6 +130,36 @@ func TestServiceUpdatesDoNotPostponeTheCycleDeadline(t *testing.T) {
 	<-updated
 }
 
+func TestBlankOnUpdateChangesDoNotPostponeTheCycleDeadline(t *testing.T) {
+	config := serviceConfig()
+	config.Cycle, config.CycleEvery = true, 180*time.Millisecond
+	s, frames, change := serviceRunner(t, config)
+	s.State.Set(scheduledServices("A", "B"))
+	nextServiceFrame(t, frames, func(f FrameRequest) bool { return f.Data.Service != nil && f.Data.Service.Provider == "A" })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	updated := make(chan struct{})
+	go func() {
+		defer close(updated)
+		tick := time.NewTicker(20 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				change(func(c *Configuration) {
+					c.Presentation.BlankOnUpdate = !c.Presentation.BlankOnUpdate
+					c.Generation++
+				})
+			}
+		}
+	}()
+	nextServiceFrame(t, frames, func(f FrameRequest) bool { return f.Data.Service != nil && f.Data.Service.Provider == "B" })
+	cancel()
+	<-updated
+}
+
 func TestServiceAwayRetainsPageAndRestartsTheFullInterval(t *testing.T) {
 	for _, removed := range []bool{false, true} {
 		name := "retained"
@@ -223,6 +253,7 @@ func TestServiceCursorFollowsIdentityAndTheNextSurvivingPage(t *testing.T) {
 	}
 	change(func(c *Configuration) {
 		c.Presentation.Reverse180 = true
+		c.Presentation.BlankOnUpdate = true
 		c.TargetID = "another output"
 		c.Generation++
 	})

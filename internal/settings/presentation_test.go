@@ -120,6 +120,7 @@ func TestPresentationSaveFailurePreservesGenerationAndPreferences(t *testing.T) 
 	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
 	next := display.ClonePresentation(prefs)
 	next.Reverse180 = true
+	next.BlankOnUpdate = true
 	if _, err := s.Save(SaveRequest{Source: "Local", Presentation: next}); err == nil {
 		t.Fatal("read-only settings were replaced")
 	}
@@ -144,18 +145,26 @@ func TestPresentationKeepsSourceSpecificMissingEntriesAndLegacyStyle(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Save(SaveRequest{Source: "Local", Presentation: &display.Presentation{Reverse180: true, Services: map[string]map[string]display.ServiceContent{"Local": {"Codex": {Enabled: true, Content: "Both"}}}}})
+	_, err = s.Save(SaveRequest{Source: "Local", Presentation: &display.Presentation{Reverse180: true, BlankOnUpdate: true, Services: map[string]map[string]display.ServiceContent{"Local": {"Codex": {Enabled: true, Content: "Both"}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	reloaded := New(path, "test.app", func() ([]turzx.Device, error) { return devices, nil }, s.logger)
 	ConfigureDisplay(reloaded, presentationThemes())
+	// Saving another setting must not erase the persisted update mode.
+	if _, err := reloaded.Save(SaveRequest{Source: "Local"}); err != nil {
+		t.Fatal(err)
+	}
 	view, err := reloaded.Get()
 	if err != nil {
 		t.Fatal(err)
 	}
 	saved, _, _ := reloaded.read()
-	if saved.LimitStyle != "Bars" || view.LimitStyle != "bars" || view.Presentation.Services["Local"]["Claude"].Enabled || view.Presentation.Services["Local"]["Claude"].Content != "Tokens" || view.Presentation.Services["Hub"]["Claude"].Content != "Limits" || !view.Presentation.Reverse180 {
+	if saved.LimitStyle != "Bars" || view.LimitStyle != "bars" || view.Presentation.Services["Local"]["Claude"].Enabled || view.Presentation.Services["Local"]["Claude"].Content != "Tokens" || view.Presentation.Services["Hub"]["Claude"].Content != "Limits" || !view.Presentation.Reverse180 || !view.Presentation.BlankOnUpdate {
 		t.Fatal("unrelated save lost old style or per-source preferences")
+	}
+	config, err := DisplayConfiguration(reloaded)
+	if err != nil || !config.Presentation.BlankOnUpdate {
+		t.Fatalf("saved update mode did not reach output configuration: %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { clearMonitorOff } from './presence';
 
 const executable = resolve(import.meta.dirname, '../../../../bin', 'token-monitor-turzx-server' + (process.platform === 'win32' ? '.exe' : ''));
 
@@ -27,6 +28,16 @@ export async function startServer(dataDir: string, port: number, env: NodeJS.Pro
     } catch { /* not listening yet */ }
     if (Date.now() > deadline) { child.kill(); throw new Error('server did not start'); }
     await new Promise(done => setTimeout(done, 200));
+  }
+  try {
+    clearMonitorOff(child.pid!);
+  } catch (error) {
+    await new Promise<void>(done => {
+      if (child.exitCode !== null || child.signalCode !== null) return done();
+      child.once('exit', () => done());
+      if (!child.kill()) done();
+    });
+    throw error;
   }
   return {
     url,

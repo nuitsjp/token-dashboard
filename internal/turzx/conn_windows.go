@@ -42,10 +42,13 @@ type pipeInformation struct {
 
 // Conn is an open connection to one TURZX display.
 type Conn struct {
-	serial  bool
-	file    syscall.Handle
-	usb     uintptr
-	in, out uint8
+	serial                bool
+	file                  syscall.Handle
+	usb                   uintptr
+	in, out               uint8
+	lastRGB565            []byte
+	lastWidth, lastHeight int
+	lastReverse180        bool
 }
 
 // Open opens the display whose device instance ID (Device.ID from List) is id,

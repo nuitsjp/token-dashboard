@@ -150,7 +150,7 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
       await page.getByRole('switch', { name: 'Rotate 180°', exact: true }).click();
       await expect.poll(() => file().presentation.reverse180).toBe(true);
       await expect.poll(() => completed?.request.reverse180).toBe(true);
-      // Device rotation follows the current burn-in offset; the preview stays upright and unshifted.
+      // The PNG stays upright and carries only the burn-in offset; the device applies the rotation.
       await checkPNGShift(page, [completed!]);
     });
     await test.step('手順3', async () => {
@@ -171,11 +171,18 @@ test('3.5インチのスタイル、サービス別巡回、スキップと保�
       await expect(content('Claude')).toBeVisible();
       await content('Claude').getByText('Tokens', { exact: true }).click();
       await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Tokens');
-      await page.getByRole('switch', { name: 'Show Claude', exact: true }).click();
+      const showClaude = page.getByRole('switch', { name: 'Show Claude', exact: true });
+      await showClaude.click();
+      // Saving also disables the radios; wait for the saved service state before toggling again.
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.enabled).toBe(false);
+      await expect(showClaude).toHaveAttribute('aria-checked', 'false');
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeDisabled();
       await expect(content('Claude').getByRole('radio', { name: 'Tokens', exact: true })).toBeChecked();
-      await page.getByRole('switch', { name: 'Show Claude', exact: true }).click();
+      await showClaude.click();
+      await expect(showClaude).toHaveAttribute('aria-checked', 'true');
+      await expect(content('Claude').getByRole('radio', { name: 'Both', exact: true })).toBeEnabled();
       await content('Claude').getByText('Both', { exact: true }).click();
+      await expect.poll(() => file().presentation?.services?.Hub?.Claude?.content).toBe('Both');
       await expect.poll(() => frame?.data.service?.count).toBe(6);
 
       const originalInterval = file().serviceCycleSeconds ?? 10;
