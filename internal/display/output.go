@@ -23,6 +23,13 @@ type Output struct {
 	done          chan struct{}
 }
 
+type outputConnection interface {
+	SendJPEG([]byte) error
+	SendRGB565([]byte, int, int, bool, bool) error
+	Restart() error
+	Close() error
+}
+
 // NewOutput rechecks the selection and settings generation before each send.
 func NewOutput(configuration func() (Configuration, error), logger *slog.Logger) *Output {
 	return &Output{configuration: configuration, logger: logger, pending: make(chan Frame, 1), done: make(chan struct{})}
@@ -39,11 +46,15 @@ func (o *Output) Submit(frame Frame) {
 
 // Run sends until ctx ends, then restarts the display so it returns to its start-up screen.
 func (o *Output) Run(ctx context.Context) {
-	defer close(o.done)
-	var conn *turzx.Conn
-	var connID, lastFailure string
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
+	o.run(ctx, tick.C, func(id string) (outputConnection, error) { return turzx.Open(id) })
+}
+
+func (o *Output) run(ctx context.Context, tick <-chan time.Time, open func(string) (outputConnection, error)) {
+	defer close(o.done)
+	var conn outputConnection
+	var connID, lastFailure string
 	var latest *Frame
 	var retryAt time.Time
 	var sentGeneration uint64
@@ -68,15 +79,23 @@ func (o *Output) Run(ctx context.Context) {
 			return
 		case frame := <-o.pending:
 			latest = &frame
-		case <-tick.C:
+		case <-tick:
+		}
+		config, err := o.configuration()
+		if err != nil {
+			fail("turzx_target_failed", err)
+			continue
+		}
+		// Release the old target before waiting for or validating its replacement image.
+		if conn != nil && config.TargetID != connID {
+			if err := conn.Restart(); err != nil {
+				o.logger.Warn("turzx_restart_failed", "cause", err)
+			}
+			conn.Close()
+			conn = nil
 		}
 		if latest == nil {
-			config, err := o.configuration()
-			if err != nil {
-				fail("turzx_target_failed", err)
-				continue
-			}
-			if conn != nil && (config.TargetID != connID || !config.TargetConnected) {
+			if conn != nil && !config.TargetConnected {
 				conn.Close()
 				conn = nil
 			}
@@ -89,11 +108,6 @@ func (o *Output) Run(ctx context.Context) {
 		if time.Now().Before(retryAt) {
 			continue
 		}
-		config, err := o.configuration()
-		if err != nil {
-			fail("turzx_target_failed", err)
-			continue
-		}
 		id := config.TargetID
 		request := latest.Request
 		if !latest.presenceCurrent() {
@@ -102,22 +116,14 @@ func (o *Output) Run(ctx context.Context) {
 		}
 		profile, known := turzx.ProfileForID(id)
 		if !known || !profile.Supports(config.Theme.Width, config.Theme.Height) || request.Generation != config.Generation || request.TargetID != id || request.Theme != config.Theme.ID || request.Width != config.Theme.Width || request.Height != config.Theme.Height {
-			if conn != nil {
-				conn.Close()
-				conn = nil
-			}
 			latest = nil
 			continue
-		}
-		if conn != nil && connID != id {
-			conn.Close()
-			conn = nil
 		}
 		if conn == nil {
 			if id == "" {
 				continue
 			}
-			if conn, err = turzx.Open(id); err != nil {
+			if conn, err = open(id); err != nil {
 				conn = nil
 				fail("turzx_open_failed", err)
 				latest = nil
